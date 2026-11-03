@@ -100,7 +100,7 @@ test('init detects the stack, creates docs/ai, adapters, exclude and hooks', () 
     assert.doesNotMatch(exclude, /\.agents/);
     assert.equal(
       execFileSync('git', ['config', 'core.hooksPath'], { cwd: root, encoding: 'utf8' }).trim(),
-      '.aquila/githooks',
+      '.aquila-hooks',
     );
     assert.equal(
       execFileSync('git', ['status', '--porcelain', '--', 'AGENTS.md', '.agents'], {
@@ -542,7 +542,7 @@ test('.aquila/: sync copies the method, check flags edits and strays, sync resto
       'core/workflow.md',
       'skills/aquila-plan/SKILL.md',
       'schema/aquila.schema.json',
-      'githooks/pre-push',
+      'hooks/guard-bash.mjs',
       'lint/rules.json',
       'README.md',
     ])
@@ -568,12 +568,15 @@ test('.aquila/: sync copies the method, check flags edits and strays, sync resto
   }
 });
 
-test('init migrates core.hooksPath from node_modules/aquila-react-ai/githooks to .aquila/githooks', () => {
+test('init migrates a 0.1.0 core.hooksPath (node_modules or .aquila/githooks) to the shared dispatcher', () => {
   const root = project();
   try {
     git(root, 'config', 'core.hooksPath', 'node_modules/aquila-react-ai/githooks');
     assert.equal(aquila(root, 'init').code, 0);
-    assert.equal(git(root, 'config', '--get', 'core.hooksPath'), '.aquila/githooks');
+    assert.equal(git(root, 'config', '--get', 'core.hooksPath'), '.aquila-hooks');
+    git(root, 'config', 'core.hooksPath', '.aquila/githooks');
+    assert.equal(aquila(root, 'sync').code, 0);
+    assert.equal(git(root, 'config', '--get', 'core.hooksPath'), '.aquila-hooks');
   } finally {
     cleanup(root);
   }

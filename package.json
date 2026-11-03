@@ -1,6 +1,6 @@
 {
   "name": "aquila-react-ai",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI-assisted development method for React: plan → tests → implement → review, quality gates, docs and adapters for Claude Code, GitHub Copilot and Codex.",
   "keywords": ["react", "reactjs", "frontend", "ai", "claude-code", "copilot", "codex", "agents", "tdd", "cli"],
   "license": "MIT",

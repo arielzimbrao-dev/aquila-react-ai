@@ -110,7 +110,10 @@ export function hookIssues(root, cfg, hooksPath) {
       issues.push(`${dir}/${phase} missing → call gate ${phase} from your hook manager`);
       continue;
     }
-    const lines = readFileSync(file, 'utf8').split(/\r?\n/);
+    const raw = readFileSync(file, 'utf8');
+    // The shared aquila-hooks dispatcher; whether this project is registered is a plain `check` issue.
+    if (/^#!\/bin\/sh\n# aquila-hooks v\d+\b/.test(raw)) continue;
+    const lines = raw.split(/\r?\n/);
     const shell =
       !lines[0].startsWith('#!') ||
       /^#!(?:\/bin\/(?:ba)?sh|\/usr\/bin\/env (?:ba)?sh)\s*$/.test(lines[0]);

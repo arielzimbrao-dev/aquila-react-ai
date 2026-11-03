@@ -17,8 +17,8 @@ source of truth and use this map before changing code.
 | Product deep audit | `core/deep-audit.md`, `skills/aquila-deep-audit/` | `test/deep-audit.test.mjs` |
 | Adoption, modes and tools | presets, CLI and existing adapters | `test/scenarios.test.mjs` |
 | Regressions DA-001 to DA-006 (gates, CI/hooks, pnpm and invalid config preservation) | `bin/stack.mjs`, `bin/checks.mjs`, `bin/aquila.mjs` | `test/audit-regressions.test.mjs` |
-| `init`, hooks and doctor | `bin/aquila.mjs` (`init`, `doctor`), `githooks/` and `skills/aquila-init/SKILL.md` | `test/init-sync.test.mjs`, `test/check-gate.test.mjs` |
-| Gate execution and filtering | `bin/aquila.mjs` (`gate`, generated `.github/workflows/aquila-gates.yml`) | `test/check-gate.test.mjs` |
+| `init`, hooks and doctor | `bin/aquila.mjs` (`init`, `doctor`), `githooks/` (the shared aquila-hooks dispatcher: keep it byte-identical in aquila-ai, aquila-react-ai and aquila-next-ai) and `skills/aquila-init/SKILL.md` | `test/init-sync.test.mjs`, `test/check-gate.test.mjs`, `test/monorepo.test.mjs` |
+| Gate execution and filtering | `bin/aquila.mjs` (`gate`, generated `.github/workflows/aquila-gates.yml` — `aquila-gates-<dir>.yml` at the repository root for a project in a subfolder) | `test/check-gate.test.mjs` |
 | Rules for a task or checklist | `core/` | contract test if there is CLI behavior |
 
 `bin/aquila.mjs` holds the CLI composition and lifecycle; validation, lint and stack detection/initial

@@ -32,19 +32,15 @@ test('guard: blocks git skipping hooks or force push, but not text that mentions
   }
 });
 
-test('git hooks delegate to the installed package and are versioned as executables', (t) => {
-  // The shipped hooks must pass the same direct-delegation check that check --ready applies.
+test('git hooks are the shared dispatcher, delegate to `gate <phase>` and are versioned as executables', (t) => {
+  // The shipped hooks must pass the same check that check --ready applies.
   const cfg = { hooks: { 'pre-commit': ['x'], 'pre-push': ['x'] } };
   assert.deepEqual(hookIssues(PKG, cfg, 'githooks'), []);
   for (const phase of ['pre-commit', 'pre-push']) {
     const text = readFileSync(join(PKG, 'githooks', phase), 'utf8');
     assert.ok(!text.includes('\r\n'), `${phase}: sh breaks with CRLF`);
-    assert.match(
-      text,
-      new RegExp(
-        `exec node "\\$\\(git rev-parse --show-toplevel\\)/node_modules/aquila-react-ai/bin/aquila\\.mjs" gate ${phase}`,
-      ),
-    );
+    assert.match(text, /\(cd "\$dir" && node "\$bin" gate "\$phase" <\/dev\/null\) \|\| status=1/);
+    assert.match(text, /^exit \$status$/m, 'gate failures propagate');
   }
   // Linux/macOS ignore hooks without +x; only verifiable when the package is a git checkout.
   let modes;

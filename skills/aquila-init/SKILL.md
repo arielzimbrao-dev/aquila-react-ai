@@ -59,13 +59,16 @@ npx aquila-react-ai init --lang=<language> --tools=<list> --token-limit=<limit|n
 ```
 
 Use the confirmed answers. The CLI creates missing configuration, copies templates without overwriting,
-generates adapters/settings, sets `core.hooksPath` and generates the CI workflow. Then interpret every
+generates adapters/settings, sets `core.hooksPath` to the repository's shared dispatcher (`.aquila-hooks/`,
+also used by the other aquila packages) and generates the CI workflow (at the repository root when the project
+is in a subfolder). Then interpret every
 `!` and `✗`:
 
 1. **Gates and runtimes:** compare detection with the real `package.json` scripts, monorepos and tools
    already in use. Fill `gates`, `hooks` and `ci` without inventing commands. Without suitable checks,
    the setup stays incomplete.
-2. **CI:** `.github/workflows/aquila-gates.yml` is self-contained (checkout, setup-node, install,
+2. **CI:** `.github/workflows/aquila-gates.yml` (`aquila-gates-<dir>.yml` at the repository root for a project
+   in a subfolder) is self-contained (checkout, setup-node, install,
    `npx aquila-react-ai check`, `npx aquila-react-ai gate ci`) and derives from `aquila.json → ci`. Keep existing
    jobs, branches, permissions and deploy; avoid duplicate checks and do not overwrite a manually edited
    workflow. Confirm the integration with the dev on conflict. Do not declare remote CI green just

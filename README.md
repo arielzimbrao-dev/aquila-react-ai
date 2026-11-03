@@ -22,7 +22,7 @@
 
 ---
 
-Version **0.1.0**
+Version **0.2.0**
 
 ## Why aquila-react-ai?
 
@@ -61,7 +61,7 @@ on clone:
 ```text
 your-react-app/
 ├── .aquila/                         ← the method (rules, roles, skills, React conventions) — synced from the package
-│   ├── core/  skills/  agents/  adapters/  schema/  githooks/  .claude-plugin/
+│   ├── core/  skills/  agents/  adapters/  schema/  .claude-plugin/
 ├── docs/
 │   ├── ai/  CONTEXT.md · golden.md · aquila.json · skills/     ← what agents must know about YOUR project
 │   ├── c4/  adr/  tracks/  reference/  runbooks/
@@ -69,6 +69,7 @@ your-react-app/
 │   ├── instructions/*.instructions.md                         ← per-folder rules (native in Copilot)
 │   ├── copilot-instructions.md
 │   └── workflows/aquila-gates.yml                             ← CI gates, generated
+├── .aquila-hooks/                                            ← git hook dispatcher, shared by every aquila package
 ├── AGENTS.md  ·  CLAUDE.md                                    ← tiny routers every agent reads first
 └── .claude/commands/aquila-*.md                               ← slash-command shortcuts
 ```
@@ -248,14 +249,46 @@ version, so the team always runs the same method.
 ## Requirements and limits
 
 Node ≥ 22, Git, a React project (Vite, Next.js, React Router, CRA…). One aquila package per project
-root: `init`/`sync` stop if `.aquila/` already belongs to `aquila-ai` (NestJS) instead of overwriting it. Zero runtime dependencies. aquila-react-ai guides and automates checks; it does
+root (folder): `init`/`sync` stop if `.aquila/` already belongs to another aquila package instead of
+overwriting it — put each project in its own folder ([Monorepo](#monorepo--project-in-a-subfolder)). Zero runtime dependencies. aquila-react-ai guides and automates checks; it does
 not guarantee defect-free code or that every model obeys every rule — that's why the human checkpoint and the
 gates exist.
 
-## Backend too?
+## Monorepo / project in a subfolder
 
-Using NestJS on the backend? [`aquila-ai`](https://www.npmjs.com/package/aquila-ai) is the same method with
-NestJS conventions.
+The project does not have to be the root of the git repository, and several aquila packages can live in the
+same repository — e.g. NestJS in `repo/backend` with `aquila-ai` and React in `repo/frontend` with
+`aquila-react-ai`. Run `npx <package> init` **inside each project folder**; everything that git and GitHub
+only read at the repository root is anchored there:
+
+| What | Where | Why |
+|---|---|---|
+| Git hooks | `repo/.aquila-hooks/` (`core.hooksPath = .aquila-hooks`) | one `core.hooksPath` per repository, resolved from the root |
+| Registered projects | `repo/.aquila-hooks/projects` — one line `<package> <dir>` per project | each `init`/`sync` adds its own line and keeps the others' |
+| CI | `repo/.github/workflows/aquila-gates-<dir>.yml`, with `working-directory: <dir>` and `paths: <dir>/**` | GitHub only reads workflows at the root |
+| Local-mode excludes | `repo/.git/info/exclude`, prefixed with `/<dir>/` | `info/exclude` is anchored at the root |
+
+The dispatcher (`.aquila-hooks/pre-commit` and `pre-push`) is the **same script in every aquila package**, so
+the packages reuse it instead of competing for `core.hooksPath`. On each commit/push it runs
+`<package> gate <phase>` only in the projects whose folder has changed files (a new branch push checks all of
+them), with the CLI installed in that project (or hoisted by workspaces). A commit that only touches the
+backend runs only the backend gates. Commit `.aquila-hooks/` and the root workflows with the projects.
+
+`npx aquila-react-ai doctor` shows the subfolder, the dispatcher, whether the hook finds the CLI, the workflow
+location and the other aquila projects; `check` fails when the hooks or the workflow are where git/GitHub never
+look (e.g. a 0.1.0 `core.hooksPath = .aquila/githooks` in a subfolder — `sync` migrates it). Copilot and
+VS Code read `.github/` and `.vscode/` only at the repository root: in a subfolder, open the project folder
+as the workspace or copy what you need to the root.
+
+## Sibling packages
+
+The same method, one package per stack — they share the hook dispatcher and coexist in one repository:
+
+| Package | Stack |
+|---|---|
+| [`aquila-ai`](https://www.npmjs.com/package/aquila-ai) | NestJS (backend) |
+| [`aquila-react-ai`](https://www.npmjs.com/package/aquila-react-ai) | React (Vite, React Router, CRA…) |
+| [`aquila-next-ai`](https://www.npmjs.com/package/aquila-next-ai) | Next.js |
 
 ## Contributing
 
