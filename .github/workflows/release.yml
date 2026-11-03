@@ -1,0 +1,36 @@
+# Publishes to npm when a semver tag (v1.2.3) is pushed, via npm Trusted Publishing (OIDC): no token.
+# Setup once on npmjs.com → aquila-react-ai → Settings → Trusted Publisher → GitHub Actions
+# (owner arielzimbrao-dev, repo aquila-react-ai, workflow release.yml).
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      # Trusted Publishing needs npm ≥ 11.5.1.
+      - run: npm install -g npm@latest
+      - run: node --test test/*.test.mjs
+      - name: package.json and plugin.json match the tag
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          plugin=$(node -p "require('./.claude-plugin/plugin.json').version")
+          test "v$pkg" = "$GITHUB_REF_NAME" && test "$pkg" = "$plugin" || { echo "version mismatch: $pkg / $plugin / $GITHUB_REF_NAME"; exit 1; }
+      # Re-running a tag for a version already on npm (e.g. published by hand) is a no-op, not a failure.
+      - name: publish (skipped if this version is already on npm)
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          if npm view "aquila-react-ai@$pkg" version >/dev/null 2>&1; then echo "aquila-react-ai@$pkg already published — skipping"; exit 0; fi
+          npm publish --access public

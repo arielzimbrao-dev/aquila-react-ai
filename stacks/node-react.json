@@ -1,0 +1,77 @@
+{
+  "name": "node-react",
+  "detect": {
+    "file": "package.json",
+    "contains": "\"react\""
+  },
+  "srcDirs": ["src", "app"],
+  "testDirs": ["test", "tests", "e2e"],
+  "lintEngine": "eslint",
+  "gates": {
+    "typecheck": {
+      "npmScripts": ["typecheck", "type-check"]
+    },
+    "test": {
+      "npmScripts": ["test:ci", "test"]
+    },
+    "lint": {
+      "npmScripts": ["lint:ci", "lint"]
+    },
+    "format": {
+      "npmScripts": ["format:check", "prettier:check"]
+    },
+    "coverage": {
+      "npmScripts": ["test:cov", "coverage"]
+    },
+    "build": {
+      "npmScripts": ["build"]
+    },
+    "e2e": {
+      "npmScripts": ["test:e2e", "e2e"],
+      "when": [
+        "src/**",
+        "app/**",
+        "public/**",
+        "e2e/**",
+        "tests/**",
+        "test/**",
+        "package.json",
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+        "index.html",
+        "vite.config.*",
+        "next.config.*",
+        "playwright.config.*",
+        "tsconfig*.json"
+      ]
+    }
+  },
+  "hooks": {
+    "pre-commit": ["format", "lint"],
+    "pre-push": ["typecheck", "test"],
+    "ci": ["typecheck", "lint", "format", "test", "coverage", "build", "e2e"]
+  },
+  "coverage": {
+    "statements": 90,
+    "functions": 90,
+    "lines": 90,
+    "branches": 85
+  },
+  "ci": {
+    "node-version": "22"
+  },
+  "coverageEnforcedIf": [
+    ["jest.config.js", "coverageThreshold"],
+    ["jest.config.ts", "coverageThreshold"],
+    ["jest.config.cjs", "coverageThreshold"],
+    ["jest.config.mjs", "coverageThreshold"],
+    ["package.json", "coverageThreshold"],
+    ["vitest.config.ts", "thresholds"],
+    ["vitest.config.js", "thresholds"],
+    ["vitest.config.mts", "thresholds"],
+    ["vite.config.ts", "thresholds"],
+    ["vite.config.js", "thresholds"],
+    ["vite.config.mts", "thresholds"]
+  ]
+}

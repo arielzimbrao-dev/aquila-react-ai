@@ -1,0 +1,6 @@
+{
+  "name": "aquila",
+  "version": "0.1.0",
+  "description": "AI development method for React: plan/tests/implement/review roles, aquila-* commands and guards.",
+  "author": { "name": "Aquila Zimbrao" }
+}

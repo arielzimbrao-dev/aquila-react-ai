@@ -1,0 +1,3 @@
+#!/bin/sh
+# aquila-react-ai: runs the "pre-push" gates from docs/ai/aquila.json (failures and totals only).
+exec node "$(git rev-parse --show-toplevel)/node_modules/aquila-react-ai/bin/aquila.mjs" gate pre-push

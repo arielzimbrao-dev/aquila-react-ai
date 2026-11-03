@@ -1,0 +1,2 @@
+# LF everywhere: git hooks (sh) break with CRLF and generated routers are compared byte by byte.
+* text=auto eol=lf

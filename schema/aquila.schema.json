@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Contract for docs/ai/aquila.json. `aquila-react-ai check` validates it with a subset of JSON Schema (type, enum, const, properties, additionalProperties, items, required, anyOf, minimum): do not use other keywords. Unknown key = warning; wrong type/value = failure.",
+  "title": "aquila-react-ai — docs/ai/aquila.json",
+  "type": "object",
+  "required": [
+    "version",
+    "project",
+    "stack",
+    "mode",
+    "tools",
+    "gates",
+    "hooks"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
+    "project": {
+      "type": "string"
+    },
+    "stack": {
+      "type": "string",
+      "enum": [
+        "node-react"
+      ],
+      "description": "Preset name in .aquila/stacks/ (React only)."
+    },
+    "mode": {
+      "enum": [
+        "local",
+        "team"
+      ],
+      "description": "local generates per-machine adapters; team versions routers/settings for teammates and cloud. Docs/config/CI are always shared. Hooks and plugin install stay local; switching to local does not remove files from the Git index."
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "copilot",
+          "claude",
+          "codex"
+        ]
+      }
+    },
+    "language": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "docs": {
+          "type": "string"
+        },
+        "answers": {
+          "type": "string",
+          "description": "Language of answers to the dev (en, pt-BR, pt-PT…)."
+        }
+      }
+    },
+    "srcDirs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "testDirs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "workspaces": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "gates": {
+      "type": "object",
+      "description": "Gate name → command (or { cmd, when }).",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "required": [
+              "cmd"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "cmd": {
+                "type": "string"
+              },
+              "when": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "description": "List of changed-path globs: in CI, the gate runs only when one matches; local hooks do not filter. A string is accepted for backward compatibility and acts only as a legacy note, with no filter."
+              }
+            }
+          }
+        ]
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "description": "Phase → gate names (defined in gates).",
+      "additionalProperties": false,
+      "properties": {
+        "pre-commit": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pre-push": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ci": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "description": "Thresholds in % (lines, branches, statements, functions) and whether the tool enforces them.",
+      "properties": {
+        "enforced": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "lint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "enum": [
+            "off",
+            "standard",
+            "high"
+          ]
+        },
+        "engine": {
+          "enum": [
+            "eslint",
+            null
+          ]
+        },
+        "pending": {
+          "type": "string"
+        },
+        "testGlobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "configPaths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "ticketPattern": {
+              "type": "string"
+            },
+            "aliases": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ci": {
+      "type": "object",
+      "description": "Settings for the generated .github/workflows/aquila-gates.yml.",
+      "additionalProperties": false,
+      "properties": {
+        "node-version": {
+          "type": "string"
+        },
+        "install-command": {
+          "type": "string"
+        },
+        "cache": {
+          "enum": [
+            "npm",
+            "pnpm",
+            "yarn"
+          ]
+        }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "description": "Glob → maximum size in characters.",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "qa": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tracker": {
+          "type": "string"
+        },
+        "environment": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "appUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "browsers": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "testUser": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contextSections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "prMaxFiles": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum changed files per PR (default 30); above it the agent proposes splitting into incremental PRs."
+        }
+      }
+    }
+  }
+}

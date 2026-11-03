@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <radialGradient id="glow" cx="0.22" cy="0.5" r="0.55">
+      <stop offset="0" stop-color="#E0234E" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#E0234E" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="640" fill="#111117"/>
+  <rect width="1280" height="640" fill="url(#glow)"/>
+  <rect x="0" y="628" width="1280" height="12" fill="#E0234E"/>
+  <g transform="translate(70 150) scale(1.3)"><defs><mask id="ogcut"><rect width="256" height="256" fill="#fff"/><g fill="#000"><path d="M96 118 L156 88 L142 110 L118 120 Z"/><path d="M78 104 C100 120 104 142 96 162 L88 161 C94 142 92 122 72 108 Z"/><path d="M48 166 L112 146 L106 154 Z"/><path d="M140 152 L212 118 L202 132 Z"/><path d="M150 186 L218 152 L208 166 Z"/></g></mask></defs><path mask="url(#ogcut)" fill="#E0234E" d="M38 180 C28 142 48 108 84 98 L118 80 C142 66 174 60 202 72 L240 60 L216 90 L248 98 L218 116 L242 136 L208 142 L216 176 L230 212 L198 198 L196 232 L172 206 L156 234 L146 202 L122 216 L126 182 C114 170 100 162 86 160 L64 158 C52 158 44 166 38 180 Z"/></g>
+  <g font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+    <text x="470" y="250" fill="#ffffff" font-size="80" font-weight="800" letter-spacing="-2">aquila-react-ai</text>
+    <text x="474" y="312" fill="#c9c9d4" font-size="34" font-weight="500">AI-assisted development method for React</text>
+    <text x="474" y="362" fill="#8b8b99" font-size="26">spec → plan → TDD → review · quality gates · token economy</text>
+    <g font-size="22" font-weight="600">
+      <rect x="474" y="404" width="178" height="44" rx="22" fill="#D97757" fill-opacity="0.16" stroke="#D97757"/>
+      <text x="563" y="433" fill="#F0A68A" text-anchor="middle">Claude Code</text>
+      <rect x="666" y="404" width="208" height="44" rx="22" fill="#ffffff" fill-opacity="0.08" stroke="#9a9aa8"/>
+      <text x="770" y="433" fill="#e6e6ee" text-anchor="middle">GitHub Copilot</text>
+      <rect x="888" y="404" width="184" height="44" rx="22" fill="#10a37f" fill-opacity="0.16" stroke="#10a37f"/>
+      <text x="980" y="433" fill="#5fd3b2" text-anchor="middle">OpenAI Codex</text>
+    </g>
+    <rect x="474" y="482" width="470" height="58" rx="10" fill="#1d1d26" stroke="#2c2c38"/>
+    <text x="498" y="520" fill="#E0234E" font-size="26" font-family="Cascadia Code, Consolas, monospace">$</text>
+    <text x="522" y="520" fill="#f2f2f7" font-size="26" font-family="Cascadia Code, Consolas, monospace">npx aquila-react-ai init</text>
+  </g>
+</svg>

@@ -1,0 +1,36 @@
+{
+  "name": "aquila-react-ai",
+  "version": "0.1.0",
+  "description": "AI-assisted development method for React: plan → tests → implement → review, quality gates, docs and adapters for Claude Code, GitHub Copilot and Codex.",
+  "keywords": ["react", "reactjs", "frontend", "ai", "claude-code", "copilot", "codex", "agents", "tdd", "cli"],
+  "license": "MIT",
+  "author": "Aquila Zimbrao",
+  "repository": { "type": "git", "url": "git+https://github.com/arielzimbrao-dev/aquila-react-ai.git" },
+  "homepage": "https://github.com/arielzimbrao-dev/aquila-react-ai#readme",
+  "bugs": "https://github.com/arielzimbrao-dev/aquila-react-ai/issues",
+  "type": "module",
+  "bin": { "aquila-react-ai": "bin/aquila.mjs" },
+  "files": [
+    "bin/",
+    "core/",
+    "agents/",
+    "adapters/",
+    "skills/",
+    "hooks/",
+    "githooks/",
+    "lint/",
+    "schema/",
+    "stacks/",
+    "templates/",
+    ".claude-plugin/",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "assets/"
+  ],
+  "engines": { "node": ">=22" },
+  "peerDependencies": { "react": ">=17" },
+  "peerDependenciesMeta": { "react": { "optional": true } },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

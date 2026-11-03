@@ -1,0 +1,688 @@
+{
+  "$comment": "Single catalog of aquila-react-ai quality rules, aligned with the Sonar way profile. Each rule is a principle + the Sonar rule (common anchor) + the local ESLint enforcement when one exists. Levels: standard ⊂ high. Read with `npx aquila-react-ai lint rules`.",
+  "rules": [
+    {
+      "id": "AQ-TYP-01",
+      "level": "standard",
+      "sonar": "S4204",
+      "title": "No explicit `any`/dynamic type",
+      "why": "An explicit type is the contract the compiler and the AI check; `any` hides errors.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "@typescript-eslint/no-explicit-any"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-ASY-01",
+      "level": "standard",
+      "sonar": "S6544",
+      "title": "Every promise is awaited or handled",
+      "why": "A dangling promise loses errors and breaks transaction ordering.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "@typescript-eslint/no-floating-promises"
+          },
+          {
+            "rule": "@typescript-eslint/no-misused-promises",
+            "options": [
+              {
+                "checksVoidReturn": false
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-ASY-02",
+      "level": "standard",
+      "title": "`async` only when there is an `await`; `return await` inside try/catch",
+      "why": "Without await the function need not be async; outside try the extra await only costs.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "@typescript-eslint/require-await"
+          },
+          {
+            "rule": "@typescript-eslint/return-await",
+            "options": ["in-try-catch"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-VAR-01",
+      "level": "standard",
+      "sonar": "S1481",
+      "title": "No unused variables/parameters (`_` prefix to ignore on purpose)",
+      "why": "Dead code confuses readers and the AI that copies the pattern.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "@typescript-eslint/no-unused-vars",
+            "options": [
+              {
+                "argsIgnorePattern": "^_",
+                "varsIgnorePattern": "^_"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-LOG-01",
+      "level": "standard",
+      "sonar": "S106",
+      "title": "No `console` in `src`: use the project logger / error reporter (e.g. Sentry) or remove it",
+      "why": "Browser consoles leak data to anyone with devtools; only the logger/reporter carries level, context and redaction.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "no-console",
+            "files": "src"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-DBG-01",
+      "level": "standard",
+      "sonar": "S1525",
+      "title": "No `debugger` statements in code",
+      "why": "It halts execution in production.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "no-debugger"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-CMP-01",
+      "level": "standard",
+      "sonar": "S1440",
+      "title": "Strict equality (`===`/`!==`)",
+      "why": "Implicit coercion causes hard-to-spot bugs.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "eqeqeq",
+            "options": ["always"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-BLK-01",
+      "level": "standard",
+      "sonar": "S121",
+      "title": "`{}` blocks on every `if`/`for`/`while`",
+      "why": "Avoids the classic bug of the second line outside the block.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "curly",
+            "options": ["all"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-CPX-01",
+      "level": "standard",
+      "sonar": "S3358",
+      "title": "No nested ternaries",
+      "why": "Unreadable; use if/else or a function.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "no-nested-ternary",
+            "files": "src"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-CPX-02",
+      "level": "standard",
+      "sonar": "S3776",
+      "title": "Cognitive complexity per function ≤ 15",
+      "why": "Above this the function does too much: extract named steps.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "sonarjs/cognitive-complexity",
+            "options": [15],
+            "files": "src"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-STR-01",
+      "level": "standard",
+      "sonar": "S6551",
+      "title": "No converting objects to string without a format (`String(obj)`, `${obj}` → \"[object Object]\")",
+      "why": "Logs and messages become useless; use a helper that serializes.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "@typescript-eslint/no-base-to-string"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-NUL-01",
+      "level": "standard",
+      "sonar": "S6582",
+      "title": "Optional chaining instead of `&&` chains",
+      "why": "Shorter and no false negatives with 0/''.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "@typescript-eslint/prefer-optional-chain"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-TYP-02",
+      "level": "standard",
+      "sonar": "S4325",
+      "title": "No unnecessary type assertions",
+      "why": "Casts that do not change the type hide the real reasoning.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "@typescript-eslint/no-unnecessary-type-assertion",
+            "files": "src"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-CFG-01",
+      "level": "standard",
+      "title": "Environment variables only in configuration modules",
+      "why": "`process.env`/`import.meta.env` are read and validated in one typed config module (e.g. `src/config/env.ts` with Zod); the rest imports it (allowed paths: `lint.options.configPaths`).",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "aquila/config-only-env",
+            "files": "src"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-TST-01",
+      "level": "standard",
+      "sonar": "S2699",
+      "title": "Every test has at least one explicit assert",
+      "why": "A test without an assert always passes; in e2e keep the response and `expect(...)` on it.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "jest/expect-expect",
+            "files": "test",
+            "options": [
+              {
+                "assertFunctionNames": ["expect", "expect*", "**.expect", "request.**.expect"]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-TST-02",
+      "level": "standard",
+      "sonar": "S1607",
+      "title": "No focused or disabled tests (`only`/`skip`/`x`)",
+      "why": "They hide suite failures in CI.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "jest/no-focused-tests",
+            "files": "test"
+          },
+          {
+            "rule": "jest/no-disabled-tests",
+            "files": "test"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-RCT-01",
+      "level": "standard",
+      "sonar": "S6440",
+      "title": "Rules of Hooks: hooks only at the top level of components and custom hooks",
+      "why": "A conditional or looped hook breaks React's call-order bookkeeping and corrupts state.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "react-hooks/rules-of-hooks"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-RCT-02",
+      "level": "standard",
+      "title": "Effect/memo/callback dependency arrays are complete",
+      "why": "A missing dependency is a stale closure: the effect reads old props/state. Fix the code, never silence the rule.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "react-hooks/exhaustive-deps"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-RCT-03",
+      "level": "standard",
+      "sonar": "S6477",
+      "title": "Every element rendered from a list has a `key`",
+      "why": "Without a key React reuses the wrong DOM/state between renders.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "react/jsx-key",
+            "files": "src"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-SEC-01",
+      "level": "standard",
+      "title": "No `dangerouslySetInnerHTML` (sanitize with DOMPurify and justify the exception inline)",
+      "why": "It bypasses React's escaping: the classic XSS hole.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "react/no-danger",
+            "files": "src"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-A11Y-01",
+      "level": "standard",
+      "sonar": "S1077",
+      "title": "Accessibility basics: `alt` on images, real links/buttons, labels on form controls, keyboard for click handlers",
+      "why": "Users with screen readers or keyboards must be able to use the UI; also what RTL `getByRole` queries rely on.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "jsx-a11y/alt-text",
+            "files": "src"
+          },
+          {
+            "rule": "jsx-a11y/anchor-is-valid",
+            "files": "src"
+          },
+          {
+            "rule": "jsx-a11y/label-has-associated-control",
+            "files": "src"
+          },
+          {
+            "rule": "jsx-a11y/click-events-have-key-events",
+            "files": "src"
+          },
+          {
+            "rule": "jsx-a11y/no-static-element-interactions",
+            "files": "src"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-IMP-01",
+      "level": "high",
+      "title": "Type-only imports use `import type`",
+      "why": "Separates runtime dependencies from compile-time ones.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "@typescript-eslint/consistent-type-imports",
+            "options": [
+              {
+                "prefer": "type-imports"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-TYP-03",
+      "level": "high",
+      "title": "No type annotations the compiler already infers; no unnecessary `=== true`",
+      "why": "Noise that adds no contract.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "@typescript-eslint/no-inferrable-types"
+          },
+          {
+            "rule": "@typescript-eslint/no-unnecessary-boolean-literal-compare"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-IMM-01",
+      "level": "high",
+      "sonar": "S2933",
+      "title": "Members never reassigned are `readonly`",
+      "why": "Explicit immutability; the AI does not introduce accidental mutations.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "@typescript-eslint/prefer-readonly"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-CPX-03",
+      "level": "high",
+      "sonar": "S6644",
+      "title": "No unnecessary ternaries (`x ? x : y` → `x ?? y`; `c ? true : false` → `c`)",
+      "why": "Shorter idiomatic form.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "no-unneeded-ternary",
+            "options": [
+              {
+                "defaultAssignment": false
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-CPX-04",
+      "level": "high",
+      "sonar": "S7735",
+      "title": "No negated conditions with `else` (swap the branches)",
+      "why": "Read the positive case first.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "unicorn/no-negated-condition"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-MOD-01",
+      "level": "high",
+      "sonar": "S7754",
+      "title": "Built-in modules with protocol (`node:fs`)",
+      "why": "Distinguishes built-ins from packages.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "unicorn/prefer-node-protocol"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-API-01",
+      "level": "high",
+      "sonar": "S7781",
+      "title": "Modern APIs: `replaceAll`, `.at(-1)`, `.some()`, `Set#has`, `Object.hasOwn`, `??=`/`||=`",
+      "why": "Parity with Sonar; explicit intent.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "unicorn/prefer-string-replace-all"
+          },
+          {
+            "rule": "unicorn/prefer-at"
+          },
+          {
+            "rule": "unicorn/prefer-array-some"
+          },
+          {
+            "rule": "unicorn/prefer-set-has",
+            "files": "src"
+          },
+          {
+            "rule": "prefer-object-has-own"
+          },
+          {
+            "rule": "logical-assignment-operators",
+            "options": ["always"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-API-02",
+      "level": "high",
+      "sonar": "S7747",
+      "title": "No redundant spreads/push and re-exports via `export … from`",
+      "why": "Fewer copies and fewer lines.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "unicorn/no-array-push-push"
+          },
+          {
+            "rule": "unicorn/no-useless-fallback-in-spread"
+          },
+          {
+            "rule": "unicorn/no-useless-spread"
+          },
+          {
+            "rule": "unicorn/prefer-export-from",
+            "options": [
+              {
+                "checkUsedVariables": false
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-TYP-04",
+      "level": "high",
+      "sonar": "S4621",
+      "title": "No duplicate or redundant union members",
+      "why": "`string | 'a'` is just `string`.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "@typescript-eslint/no-duplicate-type-constituents"
+          },
+          {
+            "rule": "@typescript-eslint/no-redundant-type-constituents"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-ERR-01",
+      "level": "high",
+      "sonar": "S7786",
+      "title": "Type errors throw `TypeError`",
+      "why": "Correct error class for type validation.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "unicorn/prefer-type-error"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-SNR-01",
+      "level": "high",
+      "title": "SonarJS recommended profile (Sonar bugs and code smells in the editor)",
+      "why": "Anticipates the Sonar quality gate; noisy rules turned off.",
+      "enforce": {
+        "eslint": [
+          {
+            "preset": "sonarjs/recommended",
+            "off": [
+              "sonarjs/no-unused-vars",
+              "sonarjs/todo-tag",
+              "sonarjs/deprecation",
+              "sonarjs/different-types-comparison",
+              "sonarjs/function-return-type"
+            ],
+            "offInTests": [
+              "sonarjs/cognitive-complexity",
+              "sonarjs/no-duplicate-string",
+              "sonarjs/no-floating-point-equality",
+              "sonarjs/no-alphabetical-sort",
+              "sonarjs/void-use",
+              "sonarjs/no-nested-functions",
+              "sonarjs/no-undefined-argument",
+              "sonarjs/no-nested-conditional",
+              "sonarjs/no-hardcoded-ip",
+              "sonarjs/regex-complexity",
+              "sonarjs/super-linear-regex",
+              "sonarjs/pseudo-random",
+              "sonarjs/hardcoded-secret-signatures"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-FN-01",
+      "level": "high",
+      "sonar": "S138",
+      "title": "Functions and components ≤ 80 lines, ≤ 5 parameters (constructors excluded), nesting ≤ 3",
+      "why": "Small functions are testable and fit in the AI context.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "max-lines-per-function",
+            "files": "src",
+            "options": [
+              {
+                "max": 80,
+                "skipBlankLines": true,
+                "skipComments": true,
+                "IIFEs": true
+              }
+            ],
+            "ignores": ["**/*.stories.*"]
+          },
+          {
+            "rule": "aquila/max-params",
+            "files": "src",
+            "options": [5],
+            "ignores": ["**/*.stories.*"]
+          },
+          {
+            "rule": "max-depth",
+            "files": "src",
+            "options": [3],
+            "ignores": ["**/*.stories.*"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-TST-03",
+      "level": "high",
+      "sonar": "S5906",
+      "title": "Specific asserts (`toHaveLength`, not `.length).toBe`)",
+      "why": "Useful failure message.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "jest/prefer-to-have-length",
+            "files": "test"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-TST-04",
+      "level": "high",
+      "title": "Test titles in present tense, no \"should\" (and no ticket ids: lint.options.ticketPattern)",
+      "why": "They describe the behavior, not the task.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "jest/valid-title",
+            "files": "test",
+            "options": [
+              {
+                "ignoreTypeOfDescribeName": true,
+                "disallowedWords": ["should"]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-RCT-04",
+      "level": "high",
+      "sonar": "S6479",
+      "title": "No array index as `key`",
+      "why": "Index keys mix up state when items are inserted, removed or reordered; use a stable id.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "react/no-array-index-key",
+            "files": "src"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-RCT-05",
+      "level": "high",
+      "sonar": "S6478",
+      "title": "No component defined inside another component",
+      "why": "A new component type every render remounts the subtree and loses its state.",
+      "enforce": {
+        "eslint": [
+          {
+            "rule": "react/no-unstable-nested-components",
+            "files": "src"
+          }
+        ]
+      }
+    },
+    {
+      "id": "AQ-TST-05",
+      "level": "high",
+      "sonar": "S5914",
+      "title": "No trivial asserts (that always pass) and no duplicate cases in `it.each`",
+      "why": "Only asserts that can fail count (Sonar S5914/S5976; no local rule — review).",
+      "enforce": {}
+    },
+    {
+      "id": "AQ-DAT-01",
+      "level": "high",
+      "sonar": "S7719",
+      "title": "Clone dates with `new Date(d.getTime())`",
+      "why": "Sonar parity (no local rule — review).",
+      "enforce": {}
+    }
+  ]
+}
