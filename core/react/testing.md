@@ -47,7 +47,8 @@ it('shows the error when the email is invalid', async () => {
 
 ## Network
 
-- Mock HTTP with MSW (`setupServer` in Node tests): handlers mirror the real contract; override per test
+- Mock HTTP the project's way first (its golden test: `vi.mock`/`jest.mock` of the API module, MSW…). With no
+  convention yet: MSW (`setupServer` in Node tests): handlers mirror the real contract; override per test
   for errors (`HttpResponse.json(..., { status: 500 })`), empty lists and slow responses.
 - `onUnhandledRequest: 'error'` so an unexpected call fails the test.
 - Don't mock your own API client or data hooks to test a component; mock the network edge. Mock
@@ -65,7 +66,7 @@ it('shows the error when the email is invalid', async () => {
 - `jest-axe`/`vitest-axe` on key components when the project has it; it complements, never replaces, role
   queries and keyboard tests (`user.tab()`, `user.keyboard('{Escape}')`).
 
-## E2E ([Playwright](https://playwright.dev/docs/best-practices))
+## E2E (the project's tool — WebdriverIO, Cypress…; [Playwright](https://playwright.dev/docs/best-practices) if it has none)
 
 - Critical user journeys only (sign-in, checkout, main CRUD); user-facing locators
   (`page.getByRole`, `getByLabel`), web-first assertions (`await expect(locator).toBeVisible()`), no fixed
@@ -87,6 +88,6 @@ it('shows the error when the email is invalid', async () => {
 | Method step | React artifact |
 |---|---|
 | Test cases from the plan | One `describe` per component/hook behavior; titles state the rule |
-| Failing tests first | Component test with RTL + MSW; e2e spec for a new critical journey |
-| Minimal code | Component + hook + API function + MSW handler, wired in the route |
+| Failing tests first | Component test with RTL + the project's network mock; e2e spec for a new critical journey |
+| Minimal code | Component + hook + API function (+ mock handler, if the project uses them), wired in the route |
 | Done checklist | Unit/component + e2e green, build green, gates green, no `only`/`skip` |

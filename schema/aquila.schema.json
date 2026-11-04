@@ -202,12 +202,37 @@
               }
             }
           }
+        },
+        "overrides": {
+          "type": "object",
+          "description": "ESLint rule id → \"off\" | \"warn\" | \"error\" | [severity, ...options]; applied after the level, per project (e.g. { \"curly\": \"off\", \"max-lines-per-function\": [\"error\", { \"max\": 120 }] }).",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "enum": [
+                  "off",
+                  "warn",
+                  "error",
+                  0,
+                  1,
+                  2
+                ]
+              },
+              {
+                "type": "array"
+              }
+            ]
+          }
+        },
+        "baseline": {
+          "type": "string",
+          "description": "Suppressions file of `lint --baseline` (ESLint bulk suppressions), relative to the project; existing violations recorded there do not fail the gate, new ones do. Default docs/ai/lint-baseline.json when the file exists."
         }
       }
     },
     "ci": {
       "type": "object",
-      "description": "Settings for the generated .github/workflows/aquila-gates.yml.",
+      "description": "Settings for the generated GitHub Actions workflow (aquila-gates.yml at the repository root).",
       "additionalProperties": false,
       "properties": {
         "node-version": {
@@ -222,6 +247,59 @@
             "pnpm",
             "yarn"
           ]
+        },
+        "workflow": {
+          "type": "boolean",
+          "description": "false: no generated workflow (the project has its own pipeline); doctor prints the steps to add to it. Default true."
+        },
+        "env": {
+          "type": "object",
+          "description": "Job environment of the generated workflow (e.g. DATABASE_URL).",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "services": {
+          "type": "object",
+          "description": "Service containers of the generated workflow, so `gate ci` can run the full suite (e.g. { \"postgres\": { \"image\": \"postgres:16\", \"env\": { \"POSTGRES_PASSWORD\": \"postgres\" }, \"ports\": [\"5432:5432\"] } }).",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "image"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "image": {
+                "type": "string"
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                }
+              },
+              "ports": {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                }
+              },
+              "options": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -280,6 +358,30 @@
           "type": "integer",
           "minimum": 1,
           "description": "Maximum changed files per PR (default 30); above it the agent proposes splitting into incremental PRs."
+        }
+      }
+    },
+    "done": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Definition of done listed in AGENTS.md.",
+      "properties": {
+        "gates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Gates the agent must leave green before saying done (default hooks.ci). Independent of CI: a gate that needs a local service can stay out of hooks.ci and still be a done criterion."
+        }
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "autoCommit": {
+          "type": "boolean",
+          "description": "true: the project owner has a standing instruction to commit (and push, if the instruction says so) after each change; the agent does not wait to be asked. Default false."
         }
       }
     }

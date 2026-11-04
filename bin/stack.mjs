@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { globToRegex } from './glob.mjs';
 import { addLintGate, missingTool } from './lint.mjs';
+import { PROFILE } from './profile.mjs';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SKIP_DIRS = new Set([
@@ -157,16 +158,55 @@ export function workspaces(root) {
   return [...new Set(out)];
 }
 
+/** The coverage gate's script is the test gate's script with coverage on (`jest` → `jest --coverage`). */
+export function coverageRunsTests(root, gates) {
+  const scripts = existsSync(join(root, 'package.json')) ? (readJson(root, 'package.json').scripts ?? {}) : {};
+  const script = (gate) => {
+    const cmd = typeof gate === 'string' ? gate : gate?.cmd;
+    const name = /^npm run ([\w:.-]+)$/.exec(cmd ?? '')?.[1];
+    return name ? scripts[name] : cmd;
+  };
+  const test = script(gates.test)?.trim();
+  const cov = script(gates.coverage)?.trim();
+  return Boolean(test && cov && cov.startsWith(test) && /coverage/.test(cov.slice(test.length)));
+}
+
 function detectMatch(root, { file, contains }) {
   return [file, ...workspaces(root).map((w) => `${w}/${file}`)].some(
     (n) => existsSync(join(root, n)) && (!contains || read(root, n).includes(contains)),
   );
 }
 
-/** The only preset (React); `detected` is false when no package.json depends on react. */
+/** This package's preset (stacks/<preset>.json): gates, hooks, coverage, configPaths. */
+export function loadPreset() {
+  return JSON.parse(readFileSync(join(PKG, 'stacks', `${PROFILE.preset}.json`), 'utf8'));
+}
+
+/** The only preset; `detected` is false when no package.json depends on the stack's framework. */
 export function detectStack(root) {
-  const preset = JSON.parse(readFileSync(join(PKG, 'stacks', 'node-react.json'), 'utf8'));
+  const preset = loadPreset();
   return { ...preset, detected: detectMatch(root, preset.detect) };
+}
+
+/** Major of a dependency: installed (hoisted too, up to the repository) first, else the declared range. */
+export function dependencyMajor(root, dep) {
+  let installed = null;
+  for (let dir = root; ; dir = dirname(dir)) {
+    const file = join(dir, 'node_modules', ...dep.split('/'), 'package.json');
+    if (existsSync(file)) {
+      installed = JSON.parse(readFileSync(file, 'utf8')).version;
+      break;
+    }
+    if (dirname(dir) === dir || existsSync(join(dir, '.git'))) break;
+  }
+  const pkg = join(root, 'package.json');
+  const declared = existsSync(pkg)
+    ? ((m) => m.dependencies?.[dep] ?? m.devDependencies?.[dep] ?? m.peerDependencies?.[dep])(
+        JSON.parse(readFileSync(pkg, 'utf8')),
+      )
+    : null;
+  const major = /\d+/.exec(installed || declared || '')?.[0];
+  return major ? Number(major) : null;
 }
 
 function nodeInstall(root) {
@@ -180,32 +220,129 @@ function coverageEnforced(root, preset) {
   return preset.coverageEnforcedIf.some(([file, text]) => detectMatch(root, { file, contains: text }));
 }
 
-function resolveGates(root, preset) {
-  const scripts = existsSync(join(root, 'package.json'))
-    ? (readJson(root, 'package.json').scripts ?? {})
-    : {};
-  const wsScripts = new Set(
-    workspaces(root).flatMap((w) => Object.keys(readJson(root, `${w}/package.json`).scripts ?? {})),
+const METRICS = ['statements', 'functions', 'lines', 'branches'];
+
+/** The `{ … }` that follows `key` in a config file (brace counting), or null. */
+function objectAfter(text, key) {
+  const at = text.search(new RegExp(String.raw`\b${key}\b["']?\s*[:=]?\s*\{`));
+  if (at < 0) return null;
+  const start = text.indexOf('{', at);
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}' && --depth === 0) return text.slice(start, i + 1);
+  }
+  return null;
+}
+
+/**
+ * Coverage thresholds the project already enforces (jest coverageThreshold.global, vitest/vite
+ * coverage.thresholds), so aquila does not propose its own default over them. null when none.
+ * ponytail: textual read of the config (no evaluation) — a threshold computed in code is not seen.
+ */
+export function projectCoverage(root, preset) {
+  for (const [file, key] of preset.coverageEnforcedIf) {
+    if (!existsSync(join(root, file))) continue;
+    const text = read(root, file);
+    let block = objectAfter(text, key);
+    if (block && key === 'coverageThreshold') block = objectAfter(block, 'global') ?? block;
+    if (!block) continue;
+    const found = {};
+    for (const metric of METRICS) {
+      const m = new RegExp(String.raw`["']?\b${metric}\b["']?\s*:\s*(\d+(?:\.\d+)?)`).exec(block);
+      if (m) found[metric] = Number(m[1]);
+    }
+    if (Object.keys(found).length) return found;
+  }
+  return null;
+}
+
+/** Common identifier words, by language. ponytail: word-list heuristic; init --code-lang overrides it. */
+const WORDS = {
+  pt: 'buscar busca criar listar lista salvar atualizar excluir remover obter gerar enviar validar calcular carregar usuario usuarios cliente clientes pedido pedidos produto produtos preco valor nome servico empresa paciente pacientes fatura consulta agenda cadastro senha endereco quantidade ativo novo erro mensagem resposta requisicao arquivo tela pagina botao formulario falha sucesso dia hora mes ano tipo descricao codigo pagamento estoque venda vendas compra insumo baixo alerta ajuda navegacao configuracao permissao perfil filtro pesquisa relatorio item itens'.split(' '),
+  en: 'get find fetch create list save update delete remove load send validate calculate user users customer customers order orders product products price value name service company patient invoice appointment schedule password address quantity active new error message response request file screen page button form failure success day hour month year type description code payment stock sale sales purchase low alert help navigation settings permission profile filter search report item items handle'.split(' '),
+};
+
+/**
+ * Language of the project's own identifiers (declared names in srcDirs): 'pt' or 'en'.
+ * The framework's API words (useState, Injectable…) are not declarations, so they don't count.
+ */
+export function detectCodeLanguage(root, srcDirs) {
+  const files = [];
+  const visit = (dir) => {
+    if (files.length >= 400 || !existsSync(join(root, dir))) return;
+    for (const name of readdirSync(join(root, dir)).sort()) {
+      const rel = `${dir}/${name}`;
+      if (SKIP_DIRS.has(name) || lstatSync(join(root, rel)).isSymbolicLink()) continue;
+      if (lstatSync(join(root, rel)).isDirectory()) visit(rel);
+      else if (/\.(?:[cm]?[jt]sx?)$/.test(name) && !/\.d\.ts$/.test(name)) files.push(rel);
+    }
+  };
+  for (const dir of srcDirs) visit(dir);
+  const count = { pt: 0, en: 0 };
+  const declared =
+    /(?:function|const|let|var|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)|^\s*(?:(?:public|private|protected|async|static|readonly)\s+)*([a-z_$][\w$]*)\s*\(/gm;
+  const strip = (w) => w.normalize('NFD').replaceAll(/[̀-ͯ]/g, '').toLowerCase();
+  for (const file of files) {
+    for (const m of read(root, file).matchAll(declared)) {
+      const words = (m[1] ?? m[2]).split(/(?=[A-Z])|_/).map(strip).filter(Boolean);
+      for (const w of words) for (const lang of ['pt', 'en']) if (WORDS[lang].includes(w)) count[lang]++;
+    }
+  }
+  return count.pt >= 5 && count.pt >= count.en * 0.6 ? 'pt' : 'en';
+}
+
+/**
+ * The project's command for each preset gate. A script that fixes (`--fix`, `--write`) never becomes a
+ * gate: in a hook it would change files in the middle of a commit. `rewrite` swaps obsolete commands
+ * (e.g. `next lint`, removed in Next 16).
+ */
+function resolveGates(root, preset, notes) {
+  const pkg = existsSync(join(root, 'package.json')) ? readJson(root, 'package.json') : {};
+  const scripts = pkg.scripts ?? {};
+  const wsScripts = new Map(
+    workspaces(root).flatMap((w) =>
+      Object.entries(readJson(root, `${w}/package.json`).scripts ?? {}),
+    ),
   );
   const pnpm = existsSync(join(root, 'pnpm-workspace.yaml'));
+  const fixes = (text) => /(?:^|\s)--(?:fix|write)\b/.test(text ?? '');
   const run = (s) => {
-    if (scripts[s]) return `npm run ${s}`;
-    if (!wsScripts.has(s)) return null;
+    if (scripts[s]) return fixes(scripts[s]) ? null : `npm run ${s}`;
+    if (!wsScripts.has(s) || fixes(wsScripts.get(s))) return null;
     return pnpm ? `pnpm -r --if-present run ${s}` : `npm run ${s} --workspaces --if-present`;
   };
+  const major = dependencyMajor(root, PROFILE.framework);
   const gates = {};
   for (const [name, spec] of Object.entries(preset.gates)) {
-    const cmd = spec.npmScripts.map(run).find(Boolean);
+    const script = spec.npmScripts.find((s) => run(s));
+    let cmd = script ? run(script) : null;
+    const rewrite = (preset.rewrite ?? []).find(
+      (r) => script && new RegExp(r.match).test(scripts[script] ?? '') && major !== null && major >= r.fromMajor,
+    );
+    if (rewrite) {
+      cmd = rewrite.cmd;
+      notes?.push(`ℹ gates.${name}: \`${scripts[script]}\` → \`${cmd}\` (${rewrite.why})`);
+    }
+    const fixing = spec.npmScripts.filter((s) => fixes(scripts[s] ?? wsScripts.get(s)));
+    if (!cmd && fixing.length)
+      notes?.push(
+        `! gates.${name}: script ${fixing.join(', ')} changes files (--fix/--write) and is not used in hooks — add a check-only script (e.g. "${name}:check") and run init again, or set gates.${name}`,
+      );
     if (cmd) gates[name] = spec.when ? { cmd, when: spec.when } : cmd;
   }
   return gates;
 }
 
-export function defaultConfig(root, preset, opts, { budgets, configPaths }) {
-  const gates = resolveGates(root, preset);
+export function defaultConfig(root, preset, opts, { budgets, configPaths, notes }) {
+  const gates = resolveGates(root, preset, notes);
   const hooks = Object.fromEntries(
     Object.entries(preset.hooks).map(([hook, names]) => [hook, names.filter((n) => gates[n])]),
   );
+  // A coverage script that is the test command plus coverage runs the same suite: in CI, test + coverage would
+  // run every test twice. A different coverage command keeps test (a passing coverage must not hide it).
+  if (hooks.ci?.includes('coverage') && coverageRunsTests(root, gates))
+    hooks.ci = hooks.ci.filter((n) => n !== 'test');
   const lint = {
     level: opts.lint ?? 'standard',
     engine: preset.lintEngine ?? null,
@@ -220,6 +357,17 @@ export function defaultConfig(root, preset, opts, { budgets, configPaths }) {
   const ci = { ...preset.ci, 'install-command': nodeInstall(root) };
   if (ci['install-command'] === 'npm ci') ci.cache = 'npm';
   const srcDirs = perPackage(preset.srcDirs).filter((d) => existsSync(join(root, d)));
+  // Identifiers: --code-lang, else detected; a Portuguese codebase takes the docs variant (pt-BR/pt-PT).
+  const docs = opts.lang ?? 'en';
+  const detected = detectCodeLanguage(root, srcDirs);
+  const code = opts.codeLang ?? (detected === 'pt' ? (docs.startsWith('pt') ? docs : 'pt-BR') : 'en');
+  if (!opts.codeLang && detected === 'pt')
+    notes?.push(`ℹ language.code ${code}: identifiers in the source are in Portuguese (--code-lang=… to change)`);
+  const existing = projectCoverage(root, preset);
+  if (existing)
+    notes?.push(
+      `ℹ coverage from the project's own thresholds: ${Object.entries(existing).map(([k, v]) => `${k} ${v}`).join(', ')}`,
+    );
   return {
     $schema: '../../.aquila/schema/aquila.schema.json',
     version: 1,
@@ -227,26 +375,20 @@ export function defaultConfig(root, preset, opts, { budgets, configPaths }) {
     stack: preset.name,
     mode: opts.mode ?? 'local',
     tools: opts.tools ?? ['copilot', 'claude', 'codex'],
-    language: { code: 'en', docs: opts.lang ?? 'en', answers: opts.lang ?? 'en' },
+    language: { code, docs, answers: docs },
     srcDirs,
     testDirs: perPackage(preset.testDirs ?? ['test']).filter((d) => existsSync(join(root, d))),
     ...(ws.length ? { workspaces: ws } : {}),
     gates,
     hooks,
     coverage: {
-      ...preset.coverage,
+      ...(existing ?? preset.coverage),
       enforced: Boolean(gates.coverage) && coverageEnforced(root, preset),
     },
     lint,
     ci,
     budgets,
     review: { prMaxFiles: opts.prMaxFiles ?? 30 },
-    qa: {
-      tracker: 'GitHub Issues',
-      environment: 'dev',
-      appUrl: null,
-      browsers: 'Chrome, Firefox, Safari',
-      testUser: null,
-    },
+    qa: { tracker: 'GitHub Issues', ...PROFILE.qa },
   };
 }

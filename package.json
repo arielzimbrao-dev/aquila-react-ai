@@ -1,15 +1,31 @@
 {
   "name": "aquila-react-ai",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AI-assisted development method for React: plan → tests → implement → review, quality gates, docs and adapters for Claude Code, GitHub Copilot and Codex.",
-  "keywords": ["react", "reactjs", "frontend", "ai", "claude-code", "copilot", "codex", "agents", "tdd", "cli"],
+  "keywords": [
+    "react",
+    "reactjs",
+    "frontend",
+    "ai",
+    "claude-code",
+    "copilot",
+    "codex",
+    "agents",
+    "tdd",
+    "cli"
+  ],
   "license": "MIT",
   "author": "Aquila Zimbrao",
-  "repository": { "type": "git", "url": "git+https://github.com/arielzimbrao-dev/aquila-react-ai.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arielzimbrao-dev/aquila-react-ai.git"
+  },
   "homepage": "https://github.com/arielzimbrao-dev/aquila-react-ai#readme",
   "bugs": "https://github.com/arielzimbrao-dev/aquila-react-ai/issues",
   "type": "module",
-  "bin": { "aquila-react-ai": "bin/aquila.mjs" },
+  "bin": {
+    "aquila-react-ai": "bin/aquila.mjs"
+  },
   "files": [
     "bin/",
     "core/",
@@ -27,9 +43,49 @@
     "CHANGELOG.md",
     "assets/"
   ],
-  "engines": { "node": ">=22" },
-  "peerDependencies": { "react": ">=17" },
-  "peerDependenciesMeta": { "react": { "optional": true } },
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "react": ">=17",
+    "eslint": "^9.24.0 || ^10.0.0",
+    "typescript-eslint": "^8.20.0",
+    "eslint-plugin-sonarjs": "^3.0.0 || ^4.0.0",
+    "eslint-plugin-jest": "^28.10.0 || ^29.0.0",
+    "eslint-plugin-unicorn": ">=65.0.1",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^5.0.0 || ^6.0.0 || ^7.0.0",
+    "eslint-plugin-jsx-a11y": "^6.10.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "eslint": {
+      "optional": true
+    },
+    "typescript-eslint": {
+      "optional": true
+    },
+    "eslint-plugin-sonarjs": {
+      "optional": true
+    },
+    "eslint-plugin-jest": {
+      "optional": true
+    },
+    "eslint-plugin-unicorn": {
+      "optional": true
+    },
+    "eslint-plugin-react": {
+      "optional": true
+    },
+    "eslint-plugin-react-hooks": {
+      "optional": true
+    },
+    "eslint-plugin-jsx-a11y": {
+      "optional": true
+    }
+  },
   "scripts": {
     "test": "node --test test/*.test.mjs"
   }

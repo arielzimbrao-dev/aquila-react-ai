@@ -1,5 +1,5 @@
-// CLI test utilities. Each test creates a temporary project with aquila-react-ai linked at
-// node_modules/aquila-react-ai and runs the real CLI against it. Tests are split per file so `node --test`
+// CLI test utilities. Each test creates a temporary project with this package (bin/profile.mjs) linked at
+// node_modules/<package> and runs the real CLI against it. Tests are split per file so `node --test`
 // runs them in parallel processes (the CLI's synchronous spawns dominate the time).
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
@@ -16,6 +16,11 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PROFILE } from '../bin/profile.mjs';
+
+/** This package's npm name and the dependency that marks a project of its stack. */
+export const NAME = PROFILE.pkg;
+export const FRAMEWORK = PROFILE.framework;
 
 export const PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const CLI = join(PKG, 'bin', 'aquila.mjs');
@@ -25,7 +30,7 @@ export function project(files = {}, { node = true } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'aquila-'));
   execFileSync('git', ['init', '-q'], { cwd: root });
   mkdirSync(join(root, 'node_modules'));
-  symlinkSync(PKG, join(root, 'node_modules', 'aquila-react-ai'), LINK_TYPE);
+  symlinkSync(PKG, join(root, 'node_modules', NAME), LINK_TYPE);
   if (node) writePackage(root);
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -36,7 +41,7 @@ export function project(files = {}, { node = true } = {}) {
 
 export function writePackage(root) {
   const pkg = {
-    dependencies: { react: '^19.0.0' },
+    dependencies: { [FRAMEWORK]: PROFILE.frameworkRange },
     scripts: {
       typecheck: 'tsc --noEmit',
       test: 'jest',
@@ -47,11 +52,11 @@ export function writePackage(root) {
   writeFileSync(join(root, 'package.json'), JSON.stringify(pkg));
 }
 
-/** Declares aquila-react-ai as a devDependency (what makes the project "installed" for CI). */
+/** Declares the package as a devDependency (what makes the project "installed" for CI). */
 export function install(root) {
   const file = join(root, 'package.json');
   const pkg = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
-  pkg.devDependencies = { ...pkg.devDependencies, 'aquila-react-ai': '^0.1.0' };
+  pkg.devDependencies = { ...pkg.devDependencies, [NAME]: '^0.1.0' };
   writeFileSync(file, JSON.stringify(pkg));
 }
 
@@ -76,7 +81,7 @@ export const editConfig = (root, fn) => {
 };
 export const cleanup = (root) => {
   // Remove the package link first so the recursive delete can never reach the repository.
-  const link = join(root, 'node_modules', 'aquila-react-ai');
+  const link = join(root, 'node_modules', NAME);
   try {
     unlinkSync(link);
   } catch {

@@ -9,8 +9,9 @@ import { readFileSync } from 'node:fs';
 const SKIP_HOOKS =
   'never skip git hooks (.aquila/core/done.md): fix the cause the gate reported';
 const FORCE_PUSH = 'force push forbidden: use --force-with-lease and only on request';
-// Hook dirs that may be (re)set: aquila-react-ai's and husky's (v9 `.husky/_`, v4–8 `.husky`).
-const HOOK_DIRS = String.raw`(?:\.aquila/githooks|\.husky(?:/_)?)/?`;
+// Hook dirs that may be (re)set: the aquila dispatcher (and the pre-0.2.0 dir) and husky's
+// (v9 `.husky/_`, v4–8 `.husky`).
+const HOOK_DIRS = String.raw`(?:\.aquila-hooks|\.aquila/githooks|\.husky(?:/_)?)/?`;
 // `git [global options] <sub>`: the subcommand after git, not the word elsewhere
 // (`git log --grep=commit -n 5` is not a commit).
 const sub = (name) =>

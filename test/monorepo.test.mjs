@@ -1,14 +1,17 @@
-// Projects that are not the git root (monorepo) and several aquila packages in one repository: the shared
-// hook dispatcher (.aquila-hooks/), the CI workflow at the root, info/exclude and changed-file paths.
+// Monorepo / project in a subfolder: hooks, core.hooksPath, CI workflow and git exclude are anchored at the
+// repository root, and every aquila package shares one hook dispatcher (.aquila-hooks/, protocol v2). The
+// commits below run the real hooks through git's own `sh` (Git Bash on Windows, /bin/sh on Linux/macOS).
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmdirSync,
   rmSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -16,288 +19,354 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
-import { CLI, LINK_TYPE, PKG, aquilaWithEnv } from './helpers.mjs';
+import { PROFILE } from '../bin/profile.mjs';
+import { aquila, editConfig, git, LINK_TYPE, NAME, PKG } from './helpers.mjs';
 
-const json = (o) => JSON.stringify(o, null, 2);
 const write = (root, path, content) => {
   mkdirSync(dirname(join(root, path)), { recursive: true });
   writeFileSync(join(root, path), content);
 };
-const run = (cwd, cmd, ...args) =>
-  spawnSync(cmd, args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
-const git = (cwd, ...args) => {
-  const r = run(cwd, 'git', ...args);
-  return { code: r.status, out: `${r.stdout}${r.stderr}` };
-};
-const cli = (cwd, ...args) => aquilaWithEnv(cwd, {}, ...args);
-const ran = (top) => (existsSync(join(top, 'ran.log')) ? readFileSync(join(top, 'ran.log'), 'utf8') : '');
+const read = (root, path) => readFileSync(join(root, path), 'utf8');
+const DISPATCHER = read(PKG, 'githooks/dispatcher');
+const MARK = "require('fs').appendFileSync(require('path').join(process.cwd(), '..', 'hooks.log'), process.argv[2] + '\\n');";
+// Another aquila package (a different stack) in the same repository; its name only matters to the registry.
+const SIBLING = NAME === 'aquila-ai' ? 'aquila-react-ai' : 'aquila-ai';
 
-/** Records which project ran which gate: `node <rel>/mark.cjs <label>` appends to <top>/ran.log. */
-const MARK = `require('node:fs').appendFileSync(require('node:path').join(__dirname, process.argv[3] || '..', 'ran.log'), process.argv[2] + '\\n');\n`;
-
-/** Temporary repository; `dirs` are aquila-react-ai projects ('.' = the root), installed like npm would. */
-function repo(dirs, { nest = null } = {}) {
+function repo() {
   const top = mkdtempSync(join(tmpdir(), 'aquila-mono-'));
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: top });
-  git(top, 'config', 'user.email', 'dev@example.com');
-  git(top, 'config', 'user.name', 'dev');
-  git(top, 'config', 'commit.gpgsign', 'false');
-  write(top, '.gitignore', 'node_modules/\nran.log\n');
-  for (const dir of dirs) {
-    const up = dir === '.' ? '.' : dir.split('/').map(() => '..').join('/');
-    write(top, `${dir}/package.json`, json({
-      dependencies: { react: '^19.0.0' },
-      devDependencies: { 'aquila-react-ai': '^0.2.0' },
-      scripts: { test: 'node -e 0' },
-    }));
-    write(top, `${dir}/mark.cjs`, MARK);
-    write(top, `${dir}/src/app.js`, 'export const app = 1;\n');
-    mkdirSync(join(top, dir, 'node_modules'), { recursive: true });
-    symlinkSync(PKG, join(top, dir, 'node_modules', 'aquila-react-ai'), LINK_TYPE);
-    const label = dir === '.' ? 'root' : dir;
-    const init = cli(join(top, dir), 'init', '--tools=codex', '--lint=off', '--mode=local');
-    assert.equal(init.code, 0, init.out);
-    const cfgPath = join(top, dir, 'docs/ai/aquila.json');
-    const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
-    cfg.gates = {
-      mark: `node mark.cjs "${label} pre-commit" ${up}`,
-      push: `node mark.cjs "${label} pre-push" ${up}`,
-    };
-    cfg.hooks = { 'pre-commit': ['mark'], 'pre-push': ['push'], ci: ['mark'] };
-    writeFileSync(cfgPath, json(cfg));
-    assert.equal(cli(join(top, dir), 'sync').code, 0);
-  }
-  if (nest) {
-    // A sibling aquila package (aquila-ai 0.2.0 for NestJS) registered in the same dispatcher.
-    write(top, `${nest}/package.json`, json({ dependencies: { '@nestjs/core': '^11.0.0' } }));
-    write(top, `${nest}/docs/ai/aquila.json`, '{}\n');
-    write(top, `${nest}/src/main.ts`, 'export {};\n');
-    write(
-      top,
-      `${nest}/node_modules/aquila-ai/bin/aquila.mjs`,
-      `import { appendFileSync } from 'node:fs';\nappendFileSync('../ran.log', '${nest} ' + process.argv[3] + '\\n');\n`,
-    );
-    const registry = join(top, '.aquila-hooks/projects');
-    writeFileSync(registry, `${readFileSync(registry, 'utf8')}aquila-ai ${nest}\n`);
-  }
-  assert.equal(git(top, 'add', '-A').code, 0);
-  const first = git(top, 'commit', '-q', '--no-verify', '-m', 'init');
-  assert.equal(first.code, 0, first.out);
+  git(top, 'config', 'user.email', 'test@example.com');
+  git(top, 'config', 'user.name', 'test');
+  git(top, 'config', 'core.autocrlf', 'false');
   return top;
 }
 
-function cleanup(top) {
-  // Unlink the package links first so the recursive delete never reaches this checkout.
-  for (const dir of ['', 'frontend', 'apps/web']) {
-    const link = join(top, dir, 'node_modules', 'aquila-react-ai');
-    try {
-      unlinkSync(link);
-    } catch {
-      try {
-        rmdirSync(link);
-      } catch {}
-    }
-  }
-  rmSync(top, { recursive: true, force: true });
+/** A project of this package's stack in <top>/<dir>, the package linked in its node_modules. */
+function project(top, dir) {
+  const root = join(top, dir);
+  mkdirSync(join(root, 'node_modules'), { recursive: true });
+  symlinkSync(PKG, join(root, 'node_modules', NAME), LINK_TYPE);
+  write(root, 'package.json', JSON.stringify({
+    dependencies: { [PROFILE.framework]: PROFILE.frameworkRange },
+    devDependencies: { [NAME]: '^0.3.0' },
+    scripts: { test: 'node mark.js test' },
+  }));
+  write(root, 'mark.js', MARK.replace("'..'", `'${dir === '.' ? '.' : '..'}'`));
+  write(root, 'src/app.ts', 'export {};\n');
+  return root;
 }
 
-const commit = (top, files) => {
-  for (const f of files) write(top, f, `// ${Math.random()}\n`);
-  git(top, 'add', '-A');
-  return git(top, 'commit', '-q', '-m', 'change');
+const markGates = (root, name) => {
+  editConfig(root, (cfg) => {
+    cfg.gates = { mark: `node mark.js ${name}` };
+    cfg.hooks = { 'pre-commit': ['mark'], 'pre-push': ['mark'], ci: ['mark'] };
+  });
+  assert.equal(aquila(root, 'sync').code, 0);
 };
 
-test('root project: init points core.hooksPath at the shared dispatcher and the hook runs the gate', () => {
-  const top = repo(['.']);
+/** The sibling package as its own init leaves things: its bin (a recorder), the dispatcher, its registry line. */
+function sibling(top, line = `${SIBLING} frontend`) {
+  const bin = join(top, 'frontend', 'node_modules', SIBLING, 'bin', 'aquila.mjs');
+  write(top, 'frontend/src/App.tsx', 'export {};\n');
+  write(top, 'frontend/package.json', '{}');
+  write(top, 'frontend/docs/ai/aquila.json', '{}');
+  mkdirSync(dirname(bin), { recursive: true });
+  writeFileSync(
+    bin,
+    "import { appendFileSync } from 'node:fs';\nimport { join } from 'node:path';\nappendFileSync(join(process.cwd(), '..', 'hooks.log'), `frontend ${process.argv.slice(2).join(' ')}\\n`);\n",
+  );
+  for (const phase of ['pre-commit', 'pre-push']) {
+    write(top, `.aquila-hooks/${phase}`, DISPATCHER);
+    chmodSync(join(top, `.aquila-hooks/${phase}`), 0o755);
+  }
+  write(top, '.aquila-hooks/projects', `# written by the sibling\n${line}\n`);
+  git(top, 'config', 'core.hooksPath', '.aquila-hooks');
+}
+
+const commit = (top, ...paths) => {
+  for (const path of paths) write(top, path, `${Date.now()}${Math.random()}\n`);
+  rmSync(join(top, 'hooks.log'), { force: true });
+  assert.equal(spawnSync('git', ['add', '-A'], { cwd: top }).status, 0);
+  const c = spawnSync('git', ['commit', '-q', '-m', paths.join(' ')], { cwd: top, encoding: 'utf8' });
+  assert.equal(c.status, 0, `${c.stdout}${c.stderr}`);
+  return existsSync(join(top, 'hooks.log')) ? read(top, 'hooks.log').trim().split('\n').sort() : [];
+};
+
+const unlinkAll = (top) => {
+  for (const dir of ['.', 'backend'])
+    for (const fn of [unlinkSync, rmdirSync])
+      try {
+        fn(join(top, dir, 'node_modules', NAME));
+        break;
+      } catch {}
+  rmSync(top, { recursive: true, force: true });
+};
+
+test('project at the repository root: dispatcher v2, registry line, the commit runs the gate', () => {
+  const top = repo();
   try {
-    assert.equal(git(top, 'config', '--get', 'core.hooksPath').out.trim(), '.aquila-hooks');
-    assert.equal(readFileSync(join(top, '.aquila-hooks/projects'), 'utf8').match(/^[^#].*$/gm).join('\n'), 'aquila-react-ai .');
-    assert.ok(existsSync(join(top, '.github/workflows/aquila-gates.yml')), 'root keeps the root workflow');
-    const c = commit(top, ['src/app.js']);
-    assert.equal(c.code, 0, c.out);
-    assert.equal(ran(top), 'root pre-commit\n');
+    const root = project(top, '.');
+    assert.equal(aquila(root, 'init', '--tools=codex', '--lint=off').code, 0);
+    markGates(root, 'root');
+    assert.equal(git(top, 'config', '--get', 'core.hooksPath'), '.aquila-hooks');
+    assert.match(read(top, '.aquila-hooks/projects'), new RegExp(`^${NAME} \\.$`, 'm'));
+    assert.equal(read(top, '.aquila-hooks/pre-commit'), DISPATCHER);
+    assert.match(DISPATCHER.split('\n')[1], /^# aquila-hooks v2 \(aquila-hooks dispatcher v2\)/);
+    assert.ok(!existsSync(join(root, '.aquila/githooks')), 'hooks never live in .aquila');
+    assert.ok(existsSync(join(top, '.github/workflows/aquila-gates.yml')));
+    assert.deepEqual(commit(top, 'src/app.ts'), ['root']);
+    // Versioned with +x even on Windows (core.fileMode=false), or Linux/macOS clones never run them.
+    for (const phase of ['pre-commit', 'pre-push'])
+      assert.match(git(top, 'ls-files', '-s', `.aquila-hooks/${phase}`), /^100755 /);
+    assert.equal(aquila(root, 'check').code, 0);
   } finally {
-    cleanup(top);
+    unlinkAll(top);
   }
 });
 
-test('project in a subfolder: hooks, exclude and CI are anchored at the repository root', () => {
-  const top = repo(['frontend']);
+test('project in repo/backend: hooks, CI workflow, exclude, Copilot and VS Code anchored at the repo root', () => {
+  const top = repo();
   try {
-    assert.equal(git(top, 'config', '--get', 'core.hooksPath').out.trim(), '.aquila-hooks');
-    assert.match(readFileSync(join(top, '.aquila-hooks/projects'), 'utf8'), /^aquila-react-ai frontend$/m);
-
-    // GitHub only reads workflows at the root: one per project, scoped to its folder.
-    assert.ok(!existsSync(join(top, 'frontend/.github/workflows/aquila-gates.yml')));
-    const wf = readFileSync(join(top, '.github/workflows/aquila-gates-frontend.yml'), 'utf8');
-    assert.match(wf, /working-directory: 'frontend'/);
-    assert.match(wf, /paths:\n\s+- 'frontend\/\*\*'/);
-    assert.match(wf, /name: aquila-gates-frontend/);
-
-    // info/exclude is anchored at the repository root.
-    const exclude = readFileSync(join(top, '.git/info/exclude'), 'utf8');
-    assert.match(exclude, /^\/frontend\/AGENTS\.md$/m);
-    assert.match(exclude, /^\/frontend\/plan\.md$/m);
-    assert.equal(git(top, 'status', '--porcelain', '--', 'frontend/AGENTS.md').out, '', 'generated router ignored');
-
-    const c = commit(top, ['frontend/src/app.js']);
-    assert.equal(c.code, 0, c.out);
-    assert.equal(ran(top), 'frontend pre-commit\n');
-
-    const check = cli(join(top, 'frontend'), 'check');
+    const root = project(top, 'backend');
+    const init = aquila(root, 'init', '--tools=copilot,claude,codex', '--lint=off');
+    assert.equal(init.code, 0, init.out);
+    markGates(root, 'backend');
+    assert.match(read(top, '.aquila-hooks/projects'), new RegExp(`^${NAME} backend$`, 'm'));
+    assert.equal(read(top, '.aquila-hooks/.gitattributes'), '* text eol=lf\n');
+    if (process.platform !== 'win32')
+      assert.ok(statSync(join(top, '.aquila-hooks/pre-commit')).mode & 0o111);
+    assert.ok(!existsSync(join(root, '.github/workflows/aquila-gates.yml')), 'never inside the subfolder');
+    const wf = read(top, '.github/workflows/aquila-gates-backend.yml');
+    assert.match(wf, /working-directory: 'backend'/);
+    assert.match(wf, /paths:\n\s+- 'backend\/\*\*'\n\s+- '\.github\/workflows\/aquila-gates-backend\.yml'/);
+    const exclude = read(top, '.git/info/exclude');
+    assert.match(exclude, /^\/backend\/AGENTS\.md$/m);
+    assert.doesNotMatch(exclude, /^\/AGENTS\.md$/m);
+    assert.match(exclude, /^\/\.vscode\/settings\.json$/m, 'the root VS Code settings are local in local mode');
+    // Copilot reads .github/ only at the root: a root instructions file scoped to backend/**.
+    const copilot = read(top, '.github/instructions/aquila-backend.instructions.md');
+    assert.match(copilot, /^---\napplyTo: 'backend\/\*\*'\n---/);
+    assert.match(copilot, /\]\(\.\.\/\.\.\/backend\/AGENTS\.md\)/);
+    assert.match(read(top, '.vscode/settings.json'), /backend\/\.aquila\/skills/);
+    assert.deepEqual(commit(top, 'backend/src/app.ts'), ['backend']);
+    assert.deepEqual(commit(top, 'README.md'), [], 'changes outside backend/ run nothing');
+    const check = aquila(root, 'check');
     assert.equal(check.code, 0, check.out);
+    const doctor = aquila(root, 'doctor').out;
+    assert.match(doctor, /subfolder backend\/ of the git repository/);
+    assert.match(doctor, /✓ git hooks: \.aquila-hooks \(dispatcher; this project registered; hook finds backend\/node_modules/);
   } finally {
-    cleanup(top);
+    unlinkAll(top);
   }
 });
 
-test('init twice is idempotent: one registry line, same dispatcher, nothing re-synced', () => {
-  const top = repo(['frontend']);
+test('init twice is idempotent; sync with ci.workflow false removes the workflow and does not recreate it', () => {
+  const top = repo();
   try {
-    const files = ['.aquila-hooks/projects', '.aquila-hooks/pre-commit', '.aquila-hooks/pre-push', '.github/workflows/aquila-gates-frontend.yml'];
-    const before = files.map((f) => readFileSync(join(top, f), 'utf8'));
-    const again = cli(join(top, 'frontend'), 'init');
-    assert.equal(again.code, 0, again.out);
-    assert.deepEqual(files.map((f) => readFileSync(join(top, f), 'utf8')), before);
-    assert.equal(git(top, 'status', '--porcelain').out, '', 'second init changes nothing versioned');
+    const root = project(top, 'backend');
+    assert.equal(aquila(root, 'init', '--tools=codex', '--lint=off').code, 0);
+    const files = ['.aquila-hooks/projects', '.aquila-hooks/pre-commit', '.git/info/exclude'];
+    const before = files.map((f) => read(top, f));
+    assert.equal(aquila(root, 'init').code, 0);
+    assert.deepEqual(files.map((f) => read(top, f)), before);
+    assert.equal(aquila(root, 'sync').out.trim(), '✓ adapters already in sync');
+    editConfig(root, (cfg) => {
+      cfg.ci.workflow = false;
+    });
+    assert.match(aquila(root, 'sync').out, /removed \.\.\/\.github\/workflows\/aquila-gates-backend\.yml \(ci\.workflow: false\)/);
+    assert.equal(aquila(root, 'sync').out.trim(), '✓ adapters already in sync');
+    assert.ok(!existsSync(join(top, '.github/workflows/aquila-gates-backend.yml')));
+    const doctor = aquila(root, 'doctor').out;
+    assert.doesNotMatch(doctor, /adapters missing/);
+    assert.match(doctor, new RegExp(`ci\\.workflow false — your pipeline must run[\\s\\S]*npx ${NAME} gate ci`));
+    assert.equal(aquila(root, 'check').code, 0);
   } finally {
-    cleanup(top);
+    unlinkAll(top);
   }
 });
 
-test('NestJS backend + React frontend: each commit and push runs only the touched projects', () => {
-  const top = repo(['frontend'], { nest: 'backend' });
-  const remote = mkdtempSync(join(tmpdir(), 'aquila-remote-'));
+for (const [format, line] of [
+  ['"<package> <dir>"', `${SIBLING} frontend`],
+  ['0.2.0 aquila-next-ai "<dir>\\t<package>"', `frontend\t${SIBLING}`],
+])
+  test(`with a sibling package (${format}): one dispatcher, each project runs only on its own changes`, () => {
+    const top = repo();
+    try {
+      sibling(top, line);
+      const root = project(top, 'backend');
+      const init = aquila(root, 'init', '--tools=codex', '--lint=off');
+      assert.equal(init.code, 0, init.out);
+      assert.doesNotMatch(init.out, /hook manager already exists|not an aquila-hooks dispatcher/);
+      markGates(root, 'backend');
+      const projects = read(top, '.aquila-hooks/projects');
+      assert.ok(projects.includes(`${line}\n`), "the sibling's line is kept as written");
+      assert.match(projects, new RegExp(`^${NAME} backend$`, 'm'));
+      git(top, 'add', '-A');
+      git(top, 'commit', '-q', '--no-verify', '-m', 'baseline');
+      assert.deepEqual(commit(top, 'backend/src/app.ts'), ['backend']);
+      assert.deepEqual(commit(top, 'frontend/src/App.tsx'), ['frontend gate pre-commit']);
+      assert.deepEqual(commit(top, 'backend/src/app.ts', 'frontend/src/App.tsx'), ['backend', 'frontend gate pre-commit']);
+      const remote = mkdtempSync(join(tmpdir(), 'aquila-remote-'));
+      try {
+        execFileSync('git', ['init', '-q', '--bare', remote]);
+        git(top, 'remote', 'add', 'origin', remote);
+        assert.equal(spawnSync('git', ['push', '-q', 'origin', 'main'], { cwd: top }).status, 0);
+        commit(top, 'frontend/src/App.tsx');
+        rmSync(join(top, 'hooks.log'), { force: true });
+        const push = spawnSync('git', ['push', '-q', 'origin', 'main'], { cwd: top, encoding: 'utf8' });
+        assert.equal(push.status, 0, `${push.stdout}${push.stderr}`);
+        assert.deepEqual(read(top, 'hooks.log').trim().split('\n'), ['frontend gate pre-push']);
+      } finally {
+        rmSync(remote, { recursive: true, force: true });
+      }
+      assert.match(aquila(root, 'doctor').out, /2 aquila projects share \.aquila-hooks/);
+    } finally {
+      unlinkAll(top);
+    }
+  });
+
+test('a 0.2.0 dispatcher (v1) is upgraded; a hand-written hook in .aquila-hooks is left alone', () => {
+  const top = repo();
   try {
-    assert.equal(commit(top, ['backend/src/main.ts']).code, 0);
-    assert.equal(ran(top), 'backend pre-commit\n', 'only the backend');
-    rmSync(join(top, 'ran.log'));
-    assert.equal(commit(top, ['frontend/src/app.js']).code, 0);
-    assert.equal(ran(top), 'frontend pre-commit\n', 'only the frontend');
-    rmSync(join(top, 'ran.log'));
-    assert.equal(commit(top, ['backend/src/main.ts', 'frontend/src/app.js']).code, 0);
-    assert.deepEqual(ran(top).trim().split('\n').sort(), ['backend pre-commit', 'frontend pre-commit']);
-    rmSync(join(top, 'ran.log'));
-    assert.equal(commit(top, ['README.md']).code, 0);
-    assert.equal(ran(top), '', 'a file outside every project runs no gate');
-
-    // pre-push: a new branch runs every project; then only what the pushed commits touched.
-    execFileSync('git', ['init', '-q', '--bare'], { cwd: remote });
-    git(top, 'remote', 'add', 'origin', remote);
-    const first = git(top, 'push', '-q', 'origin', 'main');
-    assert.equal(first.code, 0, first.out);
-    assert.deepEqual(ran(top).trim().split('\n').sort(), ['backend pre-push', 'frontend pre-push']);
-    rmSync(join(top, 'ran.log'));
-    commit(top, ['frontend/src/app.js']);
-    rmSync(join(top, 'ran.log'));
-    const second = git(top, 'push', '-q', 'origin', 'main');
-    assert.equal(second.code, 0, second.out);
-    assert.equal(ran(top), 'frontend pre-push\n');
-
-    // The other package's registry line survives our sync.
-    assert.equal(cli(join(top, 'frontend'), 'sync').code, 0);
-    assert.match(readFileSync(join(top, '.aquila-hooks/projects'), 'utf8'), /^aquila-ai backend$/m);
+    const root = project(top, 'backend');
+    write(top, '.aquila-hooks/pre-commit', '#!/bin/sh\n# aquila-hooks dispatcher v1 — old\nexit 0\n');
+    write(top, '.aquila-hooks/pre-push', '#!/bin/sh\necho mine\n');
+    const init = aquila(root, 'init', '--tools=codex', '--lint=off');
+    assert.equal(read(top, '.aquila-hooks/pre-commit'), DISPATCHER);
+    assert.equal(read(top, '.aquila-hooks/pre-push'), '#!/bin/sh\necho mine\n');
+    assert.match(init.out, /\.aquila-hooks\/pre-push is not an aquila-hooks dispatcher — left untouched/);
   } finally {
-    rmSync(remote, { recursive: true, force: true });
-    cleanup(top);
+    unlinkAll(top);
   }
 });
 
-test('a failing gate blocks the commit; a project without its package installed fails loudly', () => {
-  const top = repo(['frontend']);
+test('core.hooksPath pointing to a folder that is gone: init migrates it; a real manager is kept', () => {
+  const top = repo();
   try {
-    const cfgPath = join(top, 'frontend/docs/ai/aquila.json');
-    const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
-    cfg.gates.mark = 'node -e "process.exit(3)"';
-    writeFileSync(cfgPath, json(cfg));
-    assert.notEqual(commit(top, ['frontend/src/app.js']).code, 0, 'gate failure propagates');
-    git(top, 'reset', '-q', '--hard');
-
-    unlinkSync(join(top, '.aquila-hooks/projects'));
-    const missing = commit(top, ['frontend/src/app.js']);
-    assert.notEqual(missing.code, 0);
-    assert.match(missing.out, /\.aquila-hooks\/projects missing/);
+    const root = project(top, 'backend');
+    git(top, 'config', 'core.hooksPath', '.githooks');
+    const init = aquila(root, 'init', '--tools=codex', '--lint=off');
+    assert.equal(git(top, 'config', '--get', 'core.hooksPath'), '.aquila-hooks');
+    assert.match(init.out, /was \.githooks: that folder is gone or has no pre-commit\/pre-push/);
+    write(top, '.husky/pre-commit', '#!/bin/sh\nnpx lint-staged\n');
+    git(top, 'config', 'core.hooksPath', '.husky');
+    const kept = aquila(root, 'init');
+    assert.equal(git(top, 'config', '--get', 'core.hooksPath'), '.husky');
+    assert.match(kept.out, /a hook manager already exists \(\.husky\) — kept/);
+    assert.equal(aquila(root, 'init', '--hooks=dispatcher').code, 0);
+    assert.equal(git(top, 'config', '--get', 'core.hooksPath'), '.aquila-hooks');
   } finally {
-    cleanup(top);
+    unlinkAll(top);
   }
 });
 
-test('check fails when the hook or the workflow are where git/GitHub never look', () => {
-  const top = repo(['frontend']);
-  const front = join(top, 'frontend');
+test('check fails when a hook is versioned without +x, the 0.1.0 layout or an unregistered project', () => {
+  const top = repo();
   try {
-    // 0.1.0 set a project-relative hooksPath: git resolves it from the root, so nothing runs.
+    const root = project(top, 'backend');
+    assert.equal(aquila(root, 'init', '--tools=codex', '--lint=off').code, 0);
+    assert.equal(aquila(root, 'check').code, 0);
+    git(top, 'update-index', '--chmod=-x', '.aquila-hooks/pre-push');
+    const mode = aquila(root, 'check');
+    assert.equal(mode.code, 1);
+    assert.match(mode.out, new RegExp(`\\.aquila-hooks/pre-push is versioned without \\+x \\(100644\\)[^\\n]*npx ${NAME} init`));
+    assert.equal(aquila(root, 'init').code, 0);
+    assert.match(git(top, 'ls-files', '-s', '.aquila-hooks/pre-push'), /^100755 /);
     git(top, 'config', 'core.hooksPath', '.aquila/githooks');
-    const hook = cli(front, 'check');
-    assert.equal(hook.code, 1, hook.out);
-    assert.match(hook.out, /core\.hooksPath \.aquila\/githooks/);
-    assert.equal(cli(front, 'sync').code, 0);
-    assert.equal(git(top, 'config', '--get', 'core.hooksPath').out.trim(), '.aquila-hooks', 'sync migrates it');
-
-    // A generated workflow inside the subfolder is never read by GitHub.
-    write(top, 'frontend/.github/workflows/aquila-gates.yml', '# Generated by `npx aquila-react-ai sync` from docs/ai/aquila.json\nname: aquila-gates\n');
-    const wf = cli(front, 'check');
-    assert.equal(wf.code, 1, wf.out);
-    assert.match(wf.out, /frontend\/\.github\/workflows\/aquila-gates\.yml.*GitHub/);
-    assert.equal(cli(front, 'sync').code, 0);
-    assert.ok(!existsSync(join(front, '.github/workflows/aquila-gates.yml')), 'sync removes it');
-
-    // This project missing from the registry: the dispatcher would skip it.
-    writeFileSync(join(top, '.aquila-hooks/projects'), '');
-    const reg = cli(front, 'check');
-    assert.equal(reg.code, 1, reg.out);
-    assert.match(reg.out, /not registered in \.aquila-hooks\/projects/);
+    assert.match(aquila(root, 'check').out, /core\.hooksPath \.aquila\/githooks: pre-0\.2\.0 hook layout/);
+    assert.equal(aquila(root, 'init').code, 0);
+    write(top, '.aquila-hooks/projects', '# <package> <dir>\n');
+    assert.match(aquila(root, 'check').out, /backend is not in \.aquila-hooks\/projects/);
   } finally {
-    cleanup(top);
+    unlinkAll(top);
   }
 });
 
-test('doctor reports the subfolder, the dispatcher, the bin, the workflow and sibling packages', () => {
-  const top = repo(['frontend'], { nest: 'backend' });
+test('check --ready accepts a hook manager that calls the dispatcher or `cd <dir> && npx <package> gate`', () => {
+  const top = repo();
   try {
-    const { out } = cli(join(top, 'frontend'), 'doctor');
-    assert.match(out, /project in subfolder frontend\//);
-    assert.match(out, /✓ git hooks: \.aquila-hooks \(shared dispatcher\)/);
-    assert.match(out, /✓ hook finds frontend\/node_modules\/aquila-react-ai\/bin\/aquila\.mjs/);
-    assert.match(out, /✓ CI workflow \.github\/workflows\/aquila-gates-frontend\.yml/);
-    assert.match(out, /aquila projects in this repository: aquila-ai backend · aquila-react-ai frontend/);
+    const root = project(top, 'backend');
+    assert.equal(aquila(root, 'init', '--tools=codex', '--lint=off').code, 0);
+    markGates(root, 'backend');
+    write(top, '.husky/pre-commit', `#!/bin/sh\ncd backend && npx ${NAME} gate pre-commit\n`);
+    write(top, '.husky/pre-push', '#!/bin/sh\n"$(git rev-parse --show-toplevel)/.aquila-hooks/pre-push" "$@"\n');
+    git(top, 'config', 'core.hooksPath', '.husky');
+    const ready = aquila(root, 'check', '--ready').out;
+    assert.doesNotMatch(ready, /in a directly verifiable way/);
   } finally {
-    cleanup(top);
+    unlinkAll(top);
   }
 });
 
-test('gate ci in a subfolder filters `when` globs relative to the project, not the repository', () => {
-  const top = repo(['frontend']);
-  const front = join(top, 'frontend');
+test('the dispatcher finds a package hoisted to the repository root (npm workspaces)', () => {
+  const top = repo();
   try {
-    const cfgPath = join(front, 'docs/ai/aquila.json');
-    const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
-    cfg.gates.e2e = { cmd: 'node -e 0', when: ['src/**'] };
-    cfg.hooks.ci = ['e2e'];
-    writeFileSync(cfgPath, json(cfg));
+    const root = project(top, 'backend');
+    assert.equal(aquila(root, 'init', '--tools=codex', '--lint=off').code, 0);
+    markGates(root, 'backend');
+    unlinkSync(join(root, 'node_modules', NAME));
+    mkdirSync(join(top, 'node_modules'), { recursive: true });
+    symlinkSync(PKG, join(top, 'node_modules', NAME), LINK_TYPE);
+    try {
+      assert.deepEqual(commit(top, 'backend/src/app.ts'), ['backend']);
+    } finally {
+      for (const fn of [unlinkSync, rmdirSync])
+        try {
+          fn(join(top, 'node_modules', NAME));
+          break;
+        } catch {}
+    }
+  } finally {
+    rmSync(top, { recursive: true, force: true });
+  }
+});
+
+test('ci.services and ci.env go into the generated workflow', () => {
+  const top = repo();
+  try {
+    const root = project(top, 'backend');
+    assert.equal(aquila(root, 'init', '--tools=codex', '--lint=off').code, 0);
+    editConfig(root, (cfg) => {
+      cfg.ci.services = {
+        postgres: { image: 'postgres:16', env: { POSTGRES_PASSWORD: 'postgres' }, ports: ['5432:5432'], options: '--health-cmd pg_isready' },
+      };
+      cfg.ci.env = { DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/postgres' };
+    });
+    assert.equal(aquila(root, 'sync').code, 0);
+    const wf = read(top, '.github/workflows/aquila-gates-backend.yml');
+    assert.match(wf, /    services:\n      postgres:\n        image: 'postgres:16'\n        env:\n          POSTGRES_PASSWORD: 'postgres'\n        ports:\n          - '5432:5432'\n        options: '--health-cmd pg_isready'\n    env:\n      DATABASE_URL: 'postgres:\/\/postgres:postgres@localhost:5432\/postgres'\n    steps:/);
+    assert.match(wf, new RegExp(`run: npx ${NAME} gate ci`));
+  } finally {
+    unlinkAll(top);
+  }
+});
+
+test('CI `when` filters compare paths relative to the project, not the repository root', () => {
+  const top = repo();
+  try {
+    const root = project(top, 'backend');
+    assert.equal(aquila(root, 'init', '--tools=codex', '--lint=off').code, 0);
+    editConfig(root, (cfg) => {
+      cfg.gates = { scoped: { cmd: 'node -e 0', when: ['src/**'] } };
+      cfg.hooks = { ci: ['scoped'] };
+    });
     git(top, 'add', '-A');
-    git(top, 'commit', '-q', '--no-verify', '-m', 'cfg');
-    const before = git(top, 'rev-parse', 'HEAD').out.trim();
-    write(top, 'frontend/src/app.js', 'export const app = 2;\n');
+    git(top, 'commit', '-q', '--no-verify', '-m', 'base');
+    const base = git(top, 'rev-parse', 'HEAD');
+    write(root, 'src/app.ts', 'changed\n');
     git(top, 'add', '-A');
-    git(top, 'commit', '-q', '--no-verify', '-m', 'src');
-    const after = git(top, 'rev-parse', 'HEAD').out.trim();
+    git(top, 'commit', '-q', '--no-verify', '-m', 'head');
+    const head = git(top, 'rev-parse', 'HEAD');
     const event = join(top, 'event.json');
-    writeFileSync(event, json({ before, after }));
-    const r = aquilaWithEnv(front, { GITHUB_EVENT_PATH: event, GITHUB_SHA: after }, 'gate', 'ci');
-    assert.equal(r.code, 0, r.out);
-    assert.match(r.out, /✓ e2e/);
-    assert.doesNotMatch(r.out, /↷ e2e/);
+    writeFileSync(event, JSON.stringify({ before: base, after: head }));
+    const r = spawnSync(process.execPath, [join(PKG, 'bin', 'aquila.mjs'), 'gate', 'ci'], {
+      cwd: root,
+      env: { ...process.env, AQUILA_ROOT: root, GITHUB_EVENT_PATH: event, GITHUB_SHA: head },
+      encoding: 'utf8',
+    });
+    assert.equal(r.status, 0, r.stdout);
+    assert.match(r.stdout, /✓ scoped/);
   } finally {
-    cleanup(top);
+    unlinkAll(top);
   }
-});
-
-test('the dispatcher is package-neutral: same bytes for every aquila package', () => {
-  const text = readFileSync(join(PKG, 'githooks/pre-commit'), 'utf8');
-  assert.equal(readFileSync(join(PKG, 'githooks/pre-push'), 'utf8'), text, 'one script, phase from its name');
-  assert.match(text, /^#!\/bin\/sh\n# aquila-hooks v1\b/);
-  assert.doesNotMatch(text.replace(/^#.*$/gm, ''), /aquila-react-ai|aquila-ai|aquila-next-ai/, 'no package name in code');
-  assert.ok(!text.includes('\r\n'), 'sh breaks with CRLF');
-  assert.ok(CLI);
 });

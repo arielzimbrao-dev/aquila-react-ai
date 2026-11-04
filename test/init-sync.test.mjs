@@ -35,8 +35,8 @@ test('init detects the stack, creates docs/ai, adapters, exclude and hooks', () 
     assert.equal(cfg.gates.format, undefined, 'no format script, no invented command');
     assert.deepEqual(
       cfg.hooks.ci,
-      ['typecheck', 'lint', 'test', 'coverage'],
-      'only defined gates; coverage does not prove equivalence with test; no ESLint installed, no lint-aquila',
+      ['typecheck', 'lint', 'coverage'],
+      'only defined gates; test:cov is the test command with --coverage, so CI runs the suite once; no ESLint installed, no lint-aquila',
     );
     assert.match(cfg.lint.pending, /ESLint is not installed/);
     assert.deepEqual(cfg.language, { code: 'en', docs: 'en', answers: 'en' }, 'default en');
@@ -390,7 +390,7 @@ test('team mode versions the routers and enables the plugin in .claude/settings.
     aquila(root, 'init', '--mode=team');
     const exclude = readIn(root, '.git/info/exclude');
     assert.doesNotMatch(exclude, /^\/AGENTS\.md$/m);
-    assert.match(exclude, /^\/\.claude\/commands\/aquila-plan\.md$/m);
+    assert.doesNotMatch(exclude, /^\/\.claude\/commands\/aquila-plan\.md$/m, 'team versions the commands');
     assert.equal(
       JSON.parse(readIn(root, '.claude/settings.json')).enabledPlugins['aquila@aquila-react-ai'],
       true,

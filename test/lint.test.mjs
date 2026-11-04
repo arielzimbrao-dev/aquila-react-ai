@@ -230,25 +230,6 @@ test('lint: a missing engine gives an actionable message instead of an npx error
   }
 });
 
-test('lint: .vue/.svelte components get the framework plugin preset', async () => {
-  const { buildEslintConfig } = await import(
-    pathToFileURL(join(PKG, 'lint/eslint/build.mjs')).href
-  );
-  const catalog = JSON.parse(readFileSync(join(PKG, 'lint/rules.json'), 'utf8'));
-  const vuePreset = [{ files: ['**/*.vue'], rules: { 'vue/x': 'error' } }];
-  const { config } = buildEslintConfig(catalog, {
-    level: 'standard',
-    srcDirs: ['src'],
-    plugins: { vue: { configs: { 'flat/recommended': vuePreset } } },
-  });
-  assert.ok(
-    config.some((c) => c.files?.includes('**/*.vue')),
-    'Vue preset included',
-  );
-  const none = buildEslintConfig(catalog, { level: 'standard', srcDirs: ['src'], plugins: {} });
-  assert.ok(!none.config.some((c) => c.files?.includes('**/*.vue')), 'no plugin, no .vue');
-});
-
 test('without project gates lint-aquila does not enter CI alone', () => {
   const root = project({ 'package.json': JSON.stringify({ name: 'x' }) }, { node: false });
   try {

@@ -3,6 +3,7 @@
 // in the project are skipped and reported in `missing`.
 import { globToRegex } from '../../bin/glob.mjs';
 import { LINT_LEVELS } from '../../bin/lint.mjs';
+import { PROFILE } from '../../bin/profile.mjs';
 import { PLUGIN_OF, pluginName } from './plugins.mjs';
 
 const CODE = '{ts,tsx,mts,cts,js,jsx,mjs,cjs}';
@@ -11,8 +12,7 @@ const TS = '{ts,tsx,mts,cts}';
 /** Local plugin: rules that ESLint core lacks with the semantics aquila-react-ai needs. */
 export const aquilaPlugin = {
   rules: {
-    // `max-params` without constructors: class constructors (DI, error classes) are not counted. Components
-    // take a single props object, so they never hit it.
+    // `max-params` without constructors: in DI frameworks (NestJS) constructor parameters are the injection.
     'max-params': {
       meta: { type: 'suggestion', schema: [{ type: 'integer', minimum: 0 }] },
       create(context) {
@@ -34,7 +34,8 @@ export const aquilaPlugin = {
         };
       },
     },
-    // `process.env` / `import.meta.env` only in configuration paths (settings.aquila.configPaths).
+    // Environment access (`process.env`, and `import.meta.env` on Vite stacks) only in configuration paths
+    // (settings.aquila.configPaths). Which accesses count is the stack's (profile).
     'config-only-env': {
       meta: { type: 'problem', schema: [] },
       create(context) {
@@ -44,15 +45,17 @@ export const aquilaPlugin = {
         const root = slash(context.settings?.aquila?.root ?? '');
         const rel = root && file.startsWith(`${root}/`) ? file.slice(root.length + 1) : file;
         if (paths.some((g) => globToRegex(g).test(rel))) return {};
+        const access = PROFILE.lint.envAccess;
         const report = (node) =>
           context.report({
             node,
-            message:
-              'process.env / import.meta.env only in configuration modules (AQ-CFG-01): import the typed config.',
+            message: `${access.join(' / ')} only in configuration modules (AQ-CFG-01): ${PROFILE.lint.envHint}.`,
           });
         return {
           "MemberExpression[object.name='process'][property.name='env']": report,
-          "MemberExpression[object.type='MetaProperty'][property.name='env']": report,
+          ...(access.includes('import.meta.env')
+            ? { "MemberExpression[object.type='MetaProperty'][property.name='env']": report }
+            : {}),
         };
       },
     },
@@ -79,6 +82,7 @@ export function buildEslintConfig(catalog, opts) {
   const scoped = [];
   const presets = [];
   const missing = new Set();
+  const unknown = new Set();
   const coverage = [];
   const plugins = { ...opts.plugins, aquila: aquilaPlugin };
 
@@ -106,6 +110,14 @@ export function buildEslintConfig(catalog, opts) {
         pending.add(name);
         continue;
       }
+      // A rule the installed plugin version does not define (renamed/removed): skipped, not a crash.
+      const impl = name === 'typescript-eslint' ? plugins[name].plugin : plugins[name];
+      const known = impl?.rules && Object.keys(impl.rules).length ? impl.rules : null;
+      if (name && name !== 'aquila' && known && !known[e.rule.split('/').pop()]) {
+        pending.add(e.rule);
+        unknown.add(e.rule);
+        continue;
+      }
       configured++;
       let options = e.options ?? [];
       if (e.rule === 'jest/valid-title' && opts.ticketPattern) {
@@ -114,6 +126,23 @@ export function buildEslintConfig(catalog, opts) {
         ];
       }
       const value = ['error', ...options];
+      // DI stacks (NestJS, emitDecoratorMetadata): a constructor parameter's type is a runtime value. Whatever
+      // tsconfig the linter resolves, `--fix` must not turn those imports into `import type` (DI breaks only
+      // at runtime): the rule skips files with decorators, as typescript-eslint does when it sees the flag.
+      if (e.rule === '@typescript-eslint/consistent-type-imports' && PROFILE.lint.decoratorMetadata) {
+        const base = plugins['typescript-eslint']?.plugin?.rules?.['consistent-type-imports'];
+        if (base) {
+          aquilaPlugin.rules['consistent-type-imports'] = {
+            meta: base.meta,
+            create: (context) =>
+              /^\s*@[A-Za-z_$][\w$.]*\s*\(/m.test((context.sourceCode ?? context.getSourceCode()).text)
+                ? {}
+                : base.create(context),
+          };
+          rules[e.files ?? 'all']['aquila/consistent-type-imports'] = value;
+          continue;
+        }
+      }
       if (e.ignores)
         scoped.push({ files: scopes[e.files ?? 'all'], ignores: e.ignores, rule: e.rule, value });
       else rules[e.files ?? 'all'][e.rule] = value;
@@ -155,18 +184,24 @@ export function buildEslintConfig(catalog, opts) {
   const settings = { aquila: { configPaths: opts.configPaths ?? [], root: opts.root } };
   const block = (files, r) => ({ files, plugins: usedPlugins, settings, rules: r });
   const ts = plugins['typescript-eslint'];
-  // JSX is parsed in .jsx/.tsx either way; typescript-eslint infers it from the extension.
-  const language = [
-    ts
-      ? {
+  // NestJS: with emitDecoratorMetadata the constructor parameter types are runtime values (DI).
+  // typescript-eslint then keeps consistent-type-imports from turning those imports into `import type`.
+  const decorators = PROFILE.lint.decoratorMetadata
+    ? { emitDecoratorMetadata: true, experimentalDecorators: true }
+    : {};
+  const language = ts
+    ? [
+        {
           files: scopes.all,
           languageOptions: {
             parser: ts.parser,
-            parserOptions: { projectService: true, tsconfigRootDir: opts.root },
+            parserOptions: { projectService: true, tsconfigRootDir: opts.root, ...decorators },
           },
-        }
-      : { files: scopes.all, languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } } },
-  ];
+        },
+      ]
+    : PROFILE.lint.jsx
+      ? [{ files: scopes.all, languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } } }]
+      : [];
 
   const config = [
     // Layer on top of the project's lint: directives for rules only the project has are not "unused".
@@ -188,13 +223,14 @@ export function buildEslintConfig(catalog, opts) {
     block(test, rules.test),
     ...scoped.map((s) => ({ ...block(s.files, { [s.rule]: s.value }), ignores: s.ignores })),
   ];
-  // Framework components: the catalog applies to .ts/.js; .vue/.svelte get the recommended preset
-  // of the framework's own plugin (which brings the right parser).
-  for (const name of ['vue', 'svelte']) {
-    const preset =
-      plugins[name]?.configs?.['flat/recommended'] ?? plugins[name]?.configs?.recommended;
-    if (preset) config.push(...[preset].flat());
-  }
   if (plugins.prettier) config.push(plugins.prettier);
-  return { config, missing: [...missing], coverage };
+  // Project overrides (lint.overrides) win over the level, per rule, everywhere aquila lints.
+  const overrides = Object.entries(opts.overrides ?? {});
+  if (overrides.length)
+    config.push({
+      files: scopes.all,
+      plugins: usedPlugins,
+      rules: Object.fromEntries(overrides.map(([rule, value]) => [rule, value])),
+    });
+  return { config, missing: [...missing], unknown: [...unknown], coverage };
 }

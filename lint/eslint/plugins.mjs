@@ -1,16 +1,19 @@
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { PROFILE } from '../../bin/profile.mjs';
+
+// The stack's own plugins (react, react-hooks, jsx-a11y for React) come from the profile: a NestJS project
+// never loads them.
+const STACK = Object.fromEntries(Object.keys(PROFILE.lint.plugins).map((k) => [k, k]));
 
 export const PLUGIN_OF = {
   '@typescript-eslint': 'typescript-eslint',
   sonarjs: 'sonarjs',
   unicorn: 'unicorn',
   jest: 'jest',
-  react: 'react',
-  'react-hooks': 'react-hooks',
-  'jsx-a11y': 'jsx-a11y',
   aquila: 'aquila',
+  ...STACK,
 };
 
 const PACKAGES = {
@@ -18,11 +21,7 @@ const PACKAGES = {
   sonarjs: 'eslint-plugin-sonarjs',
   unicorn: 'eslint-plugin-unicorn',
   jest: 'eslint-plugin-jest',
-  react: 'eslint-plugin-react',
-  'react-hooks': 'eslint-plugin-react-hooks',
-  'jsx-a11y': 'eslint-plugin-jsx-a11y',
-  vue: 'eslint-plugin-vue',
-  svelte: 'eslint-plugin-svelte',
+  ...PROFILE.lint.plugins,
   prettier: 'eslint-config-prettier/flat',
 };
 

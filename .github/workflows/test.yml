@@ -21,6 +21,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+      # Real ESLint for test/lint-real.test.mjs (baseline, NestJS DI after --fix), outside the package.
+      - name: lint deps
+        shell: bash
+        run: |
+          deps="$RUNNER_TEMP/lintdeps"
+          mkdir -p "$deps" && cd "$deps" && echo '{"private":true}' > package.json
+          npm i --no-audit --no-fund eslint@9 typescript-eslint typescript eslint-plugin-sonarjs eslint-plugin-unicorn@65.0.1 eslint-plugin-jest reflect-metadata
+          echo "AQUILA_LINT_DEPS=$deps" >> "$GITHUB_ENV"
       # bash expands the glob on Windows too.
       - run: node --test test/*.test.mjs
         shell: bash

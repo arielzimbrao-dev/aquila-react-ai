@@ -64,6 +64,7 @@ is `docs/ai/aquila.json` → `review.prMaxFiles` (default **30** changed files, 
 - **In the plan:** if the planned change exceeds the limit, propose it in increments from the start — one
   branch/PR per increment, each with up to `prMaxFiles` files, green and reviewable on its own, in merge order.
 - **Before opening the PR / in review:** count the diff's files against the base
-  (`git diff --name-only <base>...HEAD`). Above the limit → suggest how to split (by layer, feature folder or
+  (`git diff --name-only <base>...HEAD`), not counting generated and managed files (`.aquila/`, `.aquila-hooks/`,
+  the routers, `.claude/commands/aquila-*`, `.github/workflows/aquila-gates*.yml`, `docs/ai/lint-baseline.json`). Above the limit → suggest how to split (by layer, feature folder or
   plan step) and offer to create the smaller branches and PRs. The dev decides; never split without
-  approval. Generated files or mass renames count, but justify an explicit exception.
+  approval. Other generated files (lockfiles, codegen) and mass renames count, but justify an explicit exception.

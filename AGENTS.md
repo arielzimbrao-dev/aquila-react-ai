@@ -36,6 +36,9 @@ and quality gates. Installed as a **devDependency** (`npm i -D aquila-react-ai` 
 
 - Everything that is **method** lives here; nothing from a project's domain (that stays in its `docs/ai/`).
 - One home per rule: `core/` holds the rules; agents, skills and adapters only point to it.
+- The CLI, hooks, CI and lint engine are the same code in aquila-ai, aquila-react-ai and aquila-next-ai; what is
+  specific to this stack lives in `bin/profile.mjs`, `stacks/`, `lint/rules.json` and `core/<stack>*.md`. Keep
+  stack knowledge out of the shared code, and keep `githooks/dispatcher` byte-identical across the three.
 - Only `adapters/` and `bin/` know the tools (paths, formats). A tool's path changed → change it there + test.
 - Tests: `node --test test/*.test.mjs` (Node ≥ 22, no dependencies; parallel; `test/helpers.mjs` is not a test); Claude plugin:
   `node --test test/plugin.test.mjs`. Changes that break projects → major + a note in [`CHANGELOG.md`](CHANGELOG.md).

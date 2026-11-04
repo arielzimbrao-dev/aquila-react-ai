@@ -1,0 +1,67 @@
+#!/bin/sh
+# aquila-hooks v2 (aquila-hooks dispatcher v2) — shared by every aquila package; do not edit.
+# Written by `npx <package> init|sync` as <repo>/.aquila-hooks/pre-commit and pre-push (core.hooksPath =
+# .aquila-hooks). For each "<package> <dir>" in .aquila-hooks/projects (dir from the repository root, "." =
+# root) with changes under <dir>, runs `<package> gate <phase>` inside <dir>: staged files on pre-commit,
+# the commits being pushed on pre-push. Same bytes in every package (source: aquila-core).
+set -f
+phase=$(basename "$0")
+top=$(git rev-parse --show-toplevel) || exit 1
+cd "$top" || exit 1
+[ -f .aquila-hooks/projects ] || exit 0
+nl='
+'
+files=
+all=
+if [ "$phase" = pre-push ]; then
+  # stdin: "<local ref> <local sha> <remote ref> <remote sha>" per pushed ref.
+  while read -r _lref lsha _rref rsha; do
+    case "$lsha" in '' | *[!0]*) ;; *) continue ;; esac # deleting a ref: nothing to check
+    [ -n "$lsha" ] || continue
+    case "$rsha" in
+      '' | *[!0]*) range=$(git diff --name-only "$rsha" "$lsha" 2>/dev/null) || range= ;;
+      *) range= ;;
+    esac
+    # New branch or remote commit unknown here: the commits no remote has yet.
+    [ -n "$range" ] || range=$(git log --name-only --format= "$lsha" --not --remotes 2>/dev/null) || all=1
+    files="$files$nl$range"
+  done
+else
+  files=$(git diff --cached --name-only)
+fi
+projects=$(tr -d '\r' <.aquila-hooks/projects)
+status=0
+while read -r a b; do
+  case "$a" in '' | '#'*) continue ;; esac
+  # "<package> <dir>"; 0.2.0 aquila-next-ai wrote "<dir><TAB><package>".
+  case "$a" in aquila*) pkg=$a dir=${b:-.} ;; *) pkg=$b dir=$a ;; esac
+  hit=$all
+  IFS=$nl
+  for f in $files; do
+    [ -n "$hit" ] && break
+    case "$dir" in .) [ -n "$f" ] && hit=1 ;; *) case "$f" in "$dir"/*) hit=1 ;; esac ;; esac
+  done
+  unset IFS
+  [ -n "$hit" ] || continue
+  # The package's CLI: <dir>/node_modules first, then hoisted (workspaces) up to the root.
+  bin=
+  d=$dir
+  while :; do
+    if [ -f "$d/node_modules/$pkg/bin/aquila.mjs" ]; then
+      bin="$top/$d/node_modules/$pkg/bin/aquila.mjs"
+      break
+    fi
+    [ "$d" = . ] && break
+    d=$(dirname "$d")
+  done
+  if [ -z "$bin" ]; then
+    echo "aquila-hooks: $dir/node_modules/$pkg not found — install the dependencies in $dir (e.g. npm install)" >&2
+    status=1
+    continue
+  fi
+  echo "aquila-hooks: $pkg gate $phase ($dir)"
+  (cd "$top/$dir" && node "$bin" gate "$phase" </dev/null) || status=1
+done <<EOF_PROJECTS
+$projects
+EOF_PROJECTS
+exit $status

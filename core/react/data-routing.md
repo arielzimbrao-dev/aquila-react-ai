@@ -14,7 +14,7 @@ Entry: [`../react.md`](../react.md). Version deltas: [`versions.md`](versions.md
   Valibot) and fail loudly instead of rendering `undefined`.
 - Cancel in-flight requests on unmount/param change (`AbortController`; data libraries do it via `signal`).
 
-## Server state ([TanStack Query](https://tanstack.com/query/latest), SWR, RTK Query)
+## Server state (the project's data layer; [TanStack Query](https://tanstack.com/query/latest) if it has none)
 
 - Use the library the project already has; one query-key factory per feature
   (`orderKeys.detail(id)`), stable and serializable keys.
@@ -68,5 +68,5 @@ Entry: [`../react.md`](../react.md). Version deltas: [`versions.md`](versions.md
 
 ## Mock layer
 
-- MSW handlers (`src/mocks/` or `test/mocks/`) mirror the API contract and are shared by tests,
+- If the project uses MSW: handlers (`src/mocks/` or `test/mocks/`) mirror the API contract and are shared by tests,
   Storybook and local dev when the project does. Update them in the same task as an API change.

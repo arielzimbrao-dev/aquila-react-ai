@@ -4,6 +4,11 @@ How agents write React code under aquila-react-ai. Project rules win (`docs/ai/`
 golden files — [`golden-files.md`](golden-files.md)); this file is the default when the project is silent.
 Open a reference file only for the area the task touches.
 
+**The project's stack wins.** Libraries named here (TanStack Query, Zod, MSW, Playwright…) are the default
+**only when the project has nothing for that concern yet**. If it already has its own data hook, `vi.mock`/
+`jest.mock` strategy, WebdriverIO/Cypress, another schema library: follow that (its golden file), never
+migrate it as a side effect — a stack change is its own task (ADR + plan).
+
 ## 1. Version and framework first
 
 1. Read the installed major: `react` in `package.json` (resolve ranges against the lockfile or
@@ -34,15 +39,17 @@ Open a reference file only for the area the task touches.
 **State**
 - Derive, don't store: anything computable from props/state is computed in render, not mirrored with an
   effect. Keep state minimal, colocated, lifted only as far as needed.
-- Server data is cache, not state: use the project's data library (TanStack Query, SWR, RTK Query, router
-  loaders, RSC) — never copy fetched data into `useState` + `useEffect` by hand.
+- Server data is cache, not state: use the project's data layer (its own hooks, TanStack Query, SWR, RTK
+  Query, router loaders, RSC — whatever it has); if it has none yet, TanStack Query. Never copy fetched data
+  into `useState` + `useEffect` by hand in a new place.
 - Global client state (Context, Zustand, Redux Toolkit…) only for truly app-wide UI state; split contexts
   so a change doesn't re-render the whole tree. URL state (filters, tabs, pagination) lives in the URL.
 - Immutable updates; `key` on list items is a stable id, never the index.
 
 **Data, forms, routing** — [`react/data-routing.md`](react/data-routing.md)
 - One typed API client layer (`api/`, generated from OpenAPI if the project does); components don't call
-  `fetch` with string URLs. Validate untrusted responses at the boundary (Zod/Valibot) when the project does.
+  `fetch` with string URLs. Validate untrusted responses at the boundary with the project's schema library
+  when it has one.
 - Every async UI has loading, error and empty states; mutations prevent double submit and show feedback.
 - Forms: the project's form library (React Hook Form, TanStack Form, React 19 Actions) + schema validation;
   server errors mapped back to fields. Client validation is UX, never security.
@@ -61,8 +68,10 @@ Open a reference file only for the area the task touches.
 **Testing** — [`react/testing.md`](react/testing.md)
 - Unit/component: the project's runner (Vitest or Jest) + React Testing Library; query by role/label
   like a user, `userEvent` for interactions; test behavior, not implementation.
-- Network mocked at the boundary (MSW), not by mocking the component's hooks.
-- E2E (Playwright/Cypress) for critical user flows. Tests come first (failing) per [`workflow.md`](workflow.md).
+- Mock the network the way the project already does (`vi.mock`/`jest.mock` of its API module, MSW…); with no
+  convention yet, MSW at the boundary rather than mocking the component's hooks.
+- E2E with the project's tool (WebdriverIO, Cypress, Playwright…; Playwright if it has none) for critical
+  user flows. Tests come first (failing) per [`workflow.md`](workflow.md).
 
 ## 3. Review red flags
 

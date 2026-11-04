@@ -62,5 +62,9 @@ export function checkConfig(schema, cfg) {
     for (const name of names.filter((n) => !cfg.gates?.[n]))
       errors.push(`hooks.${phase}: gate "${name}" is not in gates`);
   }
+  for (const name of (Array.isArray(cfg.done?.gates) ? cfg.done.gates : []).filter(
+    (n) => !cfg.gates?.[n],
+  ))
+    errors.push(`done.gates: gate "${name}" is not in gates`);
   return { errors, unknown, legacyWhen };
 }

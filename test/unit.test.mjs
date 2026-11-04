@@ -32,31 +32,6 @@ test('guard: blocks git skipping hooks or force push, but not text that mentions
   }
 });
 
-test('git hooks are the shared dispatcher, delegate to `gate <phase>` and are versioned as executables', (t) => {
-  // The shipped hooks must pass the same check that check --ready applies.
-  const cfg = { hooks: { 'pre-commit': ['x'], 'pre-push': ['x'] } };
-  assert.deepEqual(hookIssues(PKG, cfg, 'githooks'), []);
-  for (const phase of ['pre-commit', 'pre-push']) {
-    const text = readFileSync(join(PKG, 'githooks', phase), 'utf8');
-    assert.ok(!text.includes('\r\n'), `${phase}: sh breaks with CRLF`);
-    assert.match(text, /\(cd "\$dir" && node "\$bin" gate "\$phase" <\/dev\/null\) \|\| status=1/);
-    assert.match(text, /^exit \$status$/m, 'gate failures propagate');
-  }
-  // Linux/macOS ignore hooks without +x; only verifiable when the package is a git checkout.
-  let modes;
-  try {
-    modes = execFileSync('git', ['ls-files', '-s', 'githooks'], {
-      cwd: PKG,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    modes = '';
-  }
-  if (!modes) return t.skip('package is not a git checkout');
-  for (const line of modes.split('\n')) assert.match(line, /^100755 /, line);
-});
-
 test('guard: also catches -n, -c core.hooksPath and + refspec', async () => {
   const { blocked } = await import(pathToFileURL(join(PKG, 'hooks/guard-bash.mjs')).href);
   const g = 'git';
@@ -187,23 +162,6 @@ test('version: --version and version() match package.json', async () => {
   assert.match(usage.stdout, /--lang=en\|pt-BR\|pt-PT/);
   assert.match(usage.stdout, /--pr-max-files=<n>/);
   assert.equal(spawnSync(process.execPath, [CLI, '--help'], { encoding: 'utf8' }).status, 0);
-});
-
-test('reactMajor: installed react wins over the declared range; null without React', async () => {
-  const { reactMajor } = await import(pathToFileURL(CLI).href);
-  const root = project();
-  const bare = project({}, { node: false });
-  try {
-    assert.equal(reactMajor(root), 19, 'range ^19.0.0 from package.json');
-    const installed = join(root, 'node_modules/react');
-    mkdirSync(installed, { recursive: true });
-    writeFileSync(join(installed, 'package.json'), JSON.stringify({ version: '18.3.1' }));
-    assert.equal(reactMajor(root), 18, 'installed version first');
-    assert.equal(reactMajor(bare), null);
-  } finally {
-    cleanup(root);
-    cleanup(bare);
-  }
 });
 
 test('workflows: tests run on Ubuntu and Windows; release tests and checks versions before publishing', () => {
