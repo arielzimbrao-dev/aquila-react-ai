@@ -454,7 +454,8 @@
             "rule": "unicorn/prefer-string-replace-all"
           },
           {
-            "rule": "unicorn/prefer-at"
+            "rule": "unicorn/prefer-at",
+            "fix": false
           },
           {
             "rule": "unicorn/prefer-array-some"
@@ -549,6 +550,7 @@
               "sonarjs/function-return-type"
             ],
             "offInTests": [
+              "sonarjs/prefer-read-only-props",
               "sonarjs/cognitive-complexity",
               "sonarjs/no-duplicate-string",
               "sonarjs/no-floating-point-equality",

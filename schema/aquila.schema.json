@@ -380,8 +380,18 @@
       "additionalProperties": false,
       "properties": {
         "autoCommit": {
-          "type": "boolean",
-          "description": "true: the project owner has a standing instruction to commit (and push, if the instruction says so) after each change; the agent does not wait to be asked. Default false."
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "enum": [
+                "commit",
+                "commit+push"
+              ]
+            }
+          ],
+          "description": "Standing instruction from the project owner, so the agent does not wait to be asked after each green change. true or \"commit\": commit, push only when asked; \"commit+push\": commit and push. Default false."
         }
       }
     }

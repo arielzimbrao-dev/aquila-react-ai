@@ -102,3 +102,39 @@ export const git = (root, ...args) => {
     return '';
   }
 };
+
+/**
+ * Real-ESLint workspace (lint-real tests): a git repository whose root node_modules is `deps`'s (hoisted, as
+ * in npm workspaces), with the project in app/ and this package linked in app/node_modules.
+ */
+export function lintWorkspace(deps, files) {
+  const top = mkdtempSync(join(deps ?? '.', 'repo-'));
+  execFileSync('git', ['init', '-q'], { cwd: top });
+  symlinkSync(join(deps, 'node_modules'), join(top, 'node_modules'), LINK_TYPE);
+  const root = join(top, 'app');
+  mkdirSync(join(root, 'node_modules'), { recursive: true });
+  symlinkSync(PKG, join(root, 'node_modules', NAME), LINK_TYPE);
+  const all = {
+    'package.json': JSON.stringify({ dependencies: { [PROFILE.framework]: PROFILE.frameworkRange }, scripts: { test: 'node -e 0' } }),
+    'tsconfig.json': JSON.stringify({
+      // The tsconfig the linter reads does not carry the decorator flags (a build tsconfig does, here: tsc's
+      // command line), so only aquila's own parserOptions keep the injected import a value.
+      compilerOptions: { target: 'ES2022', module: 'commonjs', strict: true, rootDir: 'src', outDir: 'dist', skipLibCheck: true },
+      include: ['src'],
+    }),
+    ...files,
+  };
+  for (const [path, content] of Object.entries(all)) {
+    mkdirSync(join(root, path, '..'), { recursive: true });
+    writeFileSync(join(root, path), content);
+  }
+  return { top, root };
+}
+
+export function dropWorkspace(top) {
+  for (const link of [join(top, 'node_modules'), join(top, 'app', 'node_modules', NAME)])
+    try {
+      unlinkSync(link);
+    } catch {}
+  rmSync(top, { recursive: true, force: true });
+}

@@ -22,7 +22,7 @@
 
 ---
 
-Version **0.3.0**
+Version **0.4.0**
 
 <!-- aquila-family:start -->
 ## The aquila family
@@ -266,7 +266,9 @@ repo/
 │   └── projects              ← "aquila-ai backend" / "aquila-react-ai frontend" — one line per project
 ├── .github/
 │   ├── workflows/aquila-gates-backend.yml       ← per project: working-directory, paths: backend/**
-│   └── instructions/aquila-backend.instructions.md ← Copilot rules scoped to backend/** (applyTo)
+│   └── instructions/
+│       ├── aquila-backend.instructions.md ← Copilot rules scoped to backend/** (applyTo, generated)
+│       └── backend-<area>.instructions.md ← per-folder rules from /aquila-docs, applyTo: 'backend/src/<area>/**'
 ├── backend/                  ← NestJS + aquila-ai (.aquila/, docs/, AGENTS.md…)
 └── frontend/                 ← React + aquila-react-ai
 ```
@@ -284,8 +286,13 @@ repo/
 - **Husky or another manager?** `init` keeps it and tells you to call
   `"$(git rev-parse --show-toplevel)/.aquila-hooks/pre-commit"` (and `pre-push "$@"`) from it, or migrates with
   `init --hooks=dispatcher`. A `core.hooksPath` whose folder is gone or has no hooks is migrated with a warning.
-- **Claude Code:** each project enables its own plugin in its `.claude/settings.json`: open the session in the
-  project folder.
+- **Per-folder rules:** Copilot reads `.github/instructions/` only at the root, so `/aquila-docs` writes them
+  there as `<folder>-<area>.instructions.md` with `applyTo` prefixed by the folder; `check` counts them for
+  coverage and budget.
+- **Claude Code:** each project enables its own plugin in its `.claude/settings.json` (team mode, written by
+  `init`/`sync`): open the session in the project folder and Claude Code offers it. To install it by hand,
+  `doctor` prints the exact command (`cd "<project>" && claude plugin … --scope local`, which leaves the
+  versioned settings untouched).
 - **Verify:** `npx aquila-react-ai doctor` (subfolder, dispatcher, registered projects, bin found, workflow) and
   `npx aquila-react-ai check` (fails when hooks or the workflow sit where git/GitHub never read them).
 
@@ -322,8 +329,31 @@ instead of lowering the whole level:
 "lint": { "level": "high", "overrides": { "curly": "off", "max-lines-per-function": ["error", { "max": 120 }] } }
 ```
 
-A standing instruction like "commit after every change" goes in `workflow.autoCommit: true`, so the generated
-`AGENTS.md` doesn't contradict it.
+### Compatibility with the project's own ESLint
+
+`lint-aquila` loads plugins (sonarjs, unicorn…) the project's own ESLint may not have. An
+`// eslint-disable-next-line sonarjs/…` for an aquila rule then fails there ("Definition for rule … was not
+found") or, with `reportUnusedDisableDirectives`, is reported as unused and deleted by `--fix`. Add the helper
+as the **last** item of the project's `eslint.config`:
+
+```js
+import { aquilaEslintCompat } from 'aquila-react-ai/lint/eslint/compat.mjs';
+
+export default [...yourConfig, aquilaEslintCompat()];
+```
+
+It drops only those two directive messages, and only for rules of aquila's catalog: the project's own problems,
+fixes and stale directives of its other rules stay (keep `reportUnusedDisableDirectives` on). `doctor` warns when
+the project has an `eslint.config` without it. Rules whose autofix can break the build are reported with a
+suggestion, never rewritten by `lint --fix` (`unicorn/prefer-at`: `.at(-1)` is `T | undefined` without
+`noUncheckedIndexedAccess`).
+
+### Standing instructions and the definition of done
+
+A standing instruction like "commit after every change" goes in `workflow.autoCommit`: `true` or `"commit"`
+(commit, push only when asked) or `"commit+push"`, so the generated `AGENTS.md` doesn't contradict it. Gates the
+agent must leave green but that only your own pipeline runs (e.g. tests that need Postgres) go in `done.gates`:
+`doctor` no longer reports them as "never runs".
 <!-- aquila-legacy:end -->
 
 ## Updating

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { globToRegex } from './glob.mjs';
 import { missingTool } from './lint.mjs';
 import { PROFILE } from './profile.mjs';
@@ -34,7 +34,12 @@ export function docWarnings(root) {
   ];
 }
 
-export function inspectDocuments({ root, cfg, walk, routers, instructions, budgets, frontmatter }) {
+/**
+ * `top`/`prefix`: a project in a subfolder keeps its per-folder rules at the repository root (Copilot reads
+ * .github/ only there), named `<folder>-<area>.instructions.md` with `applyTo` prefixed by the folder. Only the
+ * root rules whose `applyTo` is all inside this project count (other projects' and the generated aquila-* stay out).
+ */
+export function inspectDocuments({ root, cfg, walk, routers, instructions, budgets, frontmatter, top = null, prefix = '' }) {
   const files = [
     ...walk('docs', (file) => file.endsWith('.md')),
     ...walk('.github', (file) => file.endsWith('.md')),
@@ -55,23 +60,32 @@ export function inspectDocuments({ root, cfg, walk, routers, instructions, budge
       if (path && !existsSync(resolve(root, file, '..', path))) broken.push(`${file} → ${target}`);
     }
   }
+  const globsOf = (file) => (frontmatter(read(root, file)).applyTo ?? '').split(',').map((g) => g.trim()).filter(Boolean);
+  const own = top
+    ? walk(top, (file) => file.endsWith('.instructions.md')).filter((file) => {
+        const globs = globsOf(file);
+        return !basename(file).startsWith('aquila-') && globs.length && globs.every((g) => g.startsWith(prefix));
+      })
+    : [];
   const candidates = [
     ...walk('docs/ai'),
     ...walk(instructions),
+    ...own,
     ...routers.filter((file) => existsSync(join(root, file))),
   ];
   const over = [];
   for (const [glob, max] of Object.entries({ ...budgets, ...cfg.budgets })) {
     const re = globToRegex(glob);
-    for (const file of candidates.filter((candidate) => re.test(candidate))) {
+    for (const file of candidates.filter((candidate) => re.test(candidate.replaceAll('../', '')))) {
       // CRLF (autocrlf) is not content.
       const size = read(root, file).replaceAll('\r\n', '\n').length;
       if (size > max) over.push(`${file}: ${size} > ${max}`);
     }
   }
-  const rules = walk(instructions, (file) => file.endsWith('.instructions.md')).flatMap((file) =>
-    (frontmatter(read(root, file)).applyTo ?? '').split(',').filter(Boolean).map(globToRegex),
-  );
+  const rules = [
+    ...walk(instructions, (file) => file.endsWith('.instructions.md')).flatMap(globsOf),
+    ...own.flatMap((file) => globsOf(file).map((g) => g.slice(prefix.length))),
+  ].map(globToRegex);
   const uncovered = rules.length
     ? (cfg.srcDirs ?? [])
         .flatMap((dir) => walk(dir))

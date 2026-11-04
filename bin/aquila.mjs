@@ -335,9 +335,9 @@ function doneSection(cfg) {
   const applied = cfg.gates?.coverage && enforced !== false;
   const how = applied
     ? 'enforced by the `coverage` command'
-    : 'target — no gate enforces it; set the threshold in the coverage tool';
+    : 'target — no gate enforces it';
   return [
-    '**Done** (gates with a `when` list only run in CI when matching files change; the other listed gates always run; local hooks do not filter by `when`; every executed gate must pass; rest of the checklist in `.aquila/core/done.md`):',
+    '**Done** (every gate that runs must pass; one with a `when` list runs in CI only when those paths change, always in local hooks; checklist: `.aquila/core/done.md`):',
     '',
     ...(lines.length
       ? lines
@@ -350,7 +350,7 @@ const prMaxFiles = (cfg) => cfg.review?.prMaxFiles ?? 30;
 
 function prLine(cfg) {
   const max = prMaxFiles(cfg);
-  return `**Small PRs:** more than ${max} changed files (not counting generated ones: \`.aquila/\`, \`.aquila-hooks/\`, routers, \`.claude/commands/aquila-*\`, \`aquila-gates*.yml\`) → propose splitting into PRs of up to ${max} files, each green on its own (\`.aquila/core/workflow.md\` §5).`;
+  return `**Small PRs:** more than ${max} changed files (not counting generated ones: \`.aquila/\`, \`.aquila-hooks/\`, routers, \`.claude/commands/aquila-*\`, \`aquila-gates*.yml\`) → propose PRs of ≤ ${max} files, each green (\`.aquila/core/workflow.md\` §5).`;
 }
 
 /** Major of the stack's framework: installed version first (hoisted too), else the range in package.json. */
@@ -361,11 +361,19 @@ function languageLine(cfg) {
   return `language: code ${l.code}, docs ${l.docs}, answers to the dev ${l.answers}.`;
 }
 
-/** A standing commit instruction from the owner replaces "commit only when asked" (workflow.autoCommit). */
-const commitLine = (cfg) =>
-  cfg.workflow?.autoCommit
-    ? '\n**Commits:** standing instruction from the project owner (`workflow.autoCommit`) — commit after each green change without waiting to be asked; push only if that instruction says so.\n'
-    : '';
+/**
+ * A standing commit instruction from the owner replaces "commit only when asked" (workflow.autoCommit:
+ * true | "commit" → commit only; "commit+push" → commit and push).
+ */
+function commitLine(cfg) {
+  const auto = cfg.workflow?.autoCommit;
+  if (!auto) return '';
+  const what =
+    auto === 'commit+push'
+      ? 'commit and push each green change unasked'
+      : 'commit each green change unasked; push only when asked';
+  return `\n**Commits:** standing instruction from the project owner (\`workflow.autoCommit\`): ${what}.\n`;
+}
 
 function skillDirs(base) {
   return existsSync(base)
@@ -384,7 +392,7 @@ export function plan(cfg) {
   const quality =
     level === 'off'
       ? ''
-      : `\n**Quality (lint \`${level}\`):** write code that already complies with \`npx ${NAME} lint rules\` (each rule has its Sonar equivalent; \`aquila-review\` checks them).\n`;
+      : `\n**Quality (lint \`${level}\`):** write code that already passes \`npx ${NAME} lint rules\` (Sonar-aligned; \`aquila-review\` checks them).\n`;
   const major = frameworkMajor();
   const out = [
     {
@@ -944,6 +952,8 @@ export function check(args = []) {
     instructions: INSTRUCTIONS,
     budgets: DEFAULT_BUDGETS,
     frontmatter,
+    top: REPO.prefix ? atTop(INSTRUCTIONS) : null,
+    prefix: REPO.prefix,
   });
   log(
     !broken.length,
@@ -999,7 +1009,7 @@ export function check(args = []) {
       const installed = claudePluginInstalled();
       if (installed !== true)
         issues.push(
-          `Claude Code plugin ${installed === null ? 'not verified (CLI unavailable or failed)' : 'missing'} → install aquila@${NAME} on this machine`,
+          `Claude Code plugin ${installed === null ? 'not verified (CLI unavailable or failed)' : 'missing'} → ${pluginInstall()}`,
         );
     }
     log(
@@ -1353,6 +1363,10 @@ function installHooks(opts = {}) {
   ];
 }
 
+/** Installs the plugin on this machine only (.claude/settings.local.json; the versioned settings stay as they are). */
+const pluginInstall = () =>
+  `cd "${ROOT}" && claude plugin marketplace add ./.aquila && claude plugin install aquila@${NAME} --scope local`;
+
 function claudePluginInstalled() {
   // On Windows `claude` is a .cmd and needs the shell; command as a single string (DEP0190).
   const r = spawnSync('claude plugin list', { encoding: 'utf8', shell: true, timeout: 15000 });
@@ -1361,16 +1375,27 @@ function claudePluginInstalled() {
   return r.stdout.includes(`aquila@${NAME}`);
 }
 
+/** The project's own ESLint without aquilaEslintCompat(): aquila-only disables break it or are removed by --fix. */
+function compatHints(cfg) {
+  if ((cfg.lint?.level ?? 'off') === 'off' || cfg.lint?.engine !== 'eslint') return [];
+  const file = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts'].map((x) => `eslint.config.${x}`).find((f) => existsSync(p(f)));
+  if (!file || read(file).includes('aquilaEslintCompat')) return [];
+  return [
+    `! ${file} does not include aquilaEslintCompat(): an eslint-disable for a rule only ${NAME} lint runs fails there ("Definition for rule … was not found") or is removed by --fix → import { aquilaEslintCompat } from '${NAME}/lint/eslint/compat.mjs' and add aquilaEslintCompat() as the last item of the exported array`,
+  ];
+}
+
 const PHASES = ['pre-commit', 'pre-push'];
 
 /** Gates that never run or run twice, and hooks from another manager that don't go through the dispatcher. */
 function gateWarnings(cfg, hooksPath) {
   const out = [];
   const ci = cfg.hooks?.ci ?? Object.keys(cfg.gates ?? {});
-  const phased = new Set([...ci, ...PHASES.flatMap((ph) => cfg.hooks?.[ph] ?? [])]);
+  // done.gates runs too: the agent runs it before saying done (e.g. tests that only the project's own CI runs).
+  const phased = new Set([...ci, ...(cfg.done?.gates ?? []), ...PHASES.flatMap((ph) => cfg.hooks?.[ph] ?? [])]);
   for (const name of Object.keys(cfg.gates ?? {}).filter((n) => !phased.has(n)))
     out.push(
-      `! gate ${name} in no phase (hooks.pre-commit/pre-push/ci): never runs${name === 'lint-aquila' ? ` — on legacy code use \`npx ${NAME} lint --baseline\` instead of leaving it out` : ''}`,
+      `! gate ${name} in no phase (hooks.pre-commit/pre-push/ci, done.gates): never runs${name === 'lint-aquila' ? ` — on legacy code use \`npx ${NAME} lint --baseline\` instead of leaving it out` : ''}`,
     );
   // The coverage command runs the suite: with both, CI runs every test twice.
   if (ci.includes('test') && ci.includes('coverage') && coverageRunsTests(ROOT, cfg.gates ?? {}))
@@ -1437,7 +1462,7 @@ function locationIssues(cfg) {
 function repoDiagnostics(cfg, hooksPath) {
   if (REPO.prefix)
     console.log(
-      `ℹ project in subfolder ${REPO.prefix} of the git repository — hooks, CI and Copilot instructions (.github/instructions/aquila-${ciSlug(REPO.prefix)}.instructions.md) live at the root`,
+      `ℹ project in subfolder ${REPO.prefix} of the git repository — hooks, CI and Copilot instructions (.github/instructions/aquila-${ciSlug(REPO.prefix)}.instructions.md, and per-folder rules as .github/instructions/${ciSlug(REPO.prefix)}-<area>.instructions.md with applyTo '${REPO.prefix}…') live at the root`,
     );
   const kind = hooksPathKind(REPO.top, hooksPath);
   if (kind === 'dispatcher') {
@@ -1520,7 +1545,13 @@ export function doctor() {
   const hooksPath = git('config', '--get', 'core.hooksPath');
   repoDiagnostics(cfg, hooksPath);
   for (const warning of gateWarnings(cfg, hooksPath)) console.log(warning);
+  for (const hint of compatHints(cfg)) console.log(hint);
   if (cfg.tools.includes('claude')) {
+    // Team mode: .claude/settings.json (versioned, written by sync) already enables it, so Claude Code offers it
+    // when the folder is opened and trusted. Installing by hand uses --scope local: --scope project rewrites
+    // that versioned file (only its key order changes, a diff with no real change).
+    const team = cfg.mode === 'team' && !settingsDrift(cfg).some((d) => d.startsWith('.claude/'));
+    if (team) console.log(`ℹ aquila@${NAME} enabled in .claude/settings.json (team): Claude Code offers it when this folder is opened`);
     const installed = claudePluginInstalled();
     if (installed === null)
       console.log('! claude CLI unavailable or failed — Claude Code plugin not verified');
@@ -1529,7 +1560,7 @@ export function doctor() {
         installed,
         installed
           ? `Claude Code plugin aquila@${NAME}`
-          : `Claude Code plugin missing → claude plugin marketplace add ./.aquila && claude plugin install aquila@${NAME} --scope ${cfg.mode === 'team' ? 'project' : 'local'}`,
+          : `Claude Code plugin missing → ${pluginInstall()}`,
       );
   }
   return 0;

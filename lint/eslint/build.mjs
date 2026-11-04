@@ -63,6 +63,30 @@ export const aquilaPlugin = {
 };
 
 /**
+ * A catalog rule with `"fix": false` reports its autofix as a suggestion (e.g. `unicorn/prefer-at`: `.at(-1)`
+ * is `T | undefined`, so the fix breaks the typecheck without noUncheckedIndexedAccess). `skip` (a preset's
+ * `skipWhenMatches`): a report is dropped when the source of the reported node's parent matches the regex
+ * (e.g. the whole `it(…)` call for sonarjs/assertions-in-tests).
+ */
+function wrapRule(base, { fix = true, skip }) {
+  const re = skip ? new RegExp(skip) : null;
+  return {
+    ...base,
+    meta: { ...base.meta, ...(fix ? {} : { hasSuggestions: true }) },
+    create(context) {
+      const report = (d) => {
+        const node = d.node?.parent ?? d.node;
+        if (re && node && re.test((context.sourceCode ?? context.getSourceCode()).getText(node))) return;
+        if (!fix && d.fix)
+          d = { ...d, fix: undefined, suggest: [...(d.suggest ?? []), { desc: 'Apply the change (check the types it returns)', fix: d.fix }] };
+        context.report(d);
+      };
+      return base.create(Object.create(context, { report: { value: report } }));
+    },
+  };
+}
+
+/**
  * @param {{ rules: object[] }} catalog
  * @param {{ level: string, srcDirs: string[], testGlobs?: string[], configPaths?: string[], root?: string, aliases?: Record<string, string>, plugins: Record<string, object|null> }} opts
  * @returns {{ config: object[], missing: string[], coverage: object[] }}
@@ -73,15 +97,20 @@ export function buildEslintConfig(catalog, opts) {
   // and the typed parser cannot read them.
   const code = opts.plugins['typescript-eslint'] ? TS : CODE;
   const src = opts.srcDirs.map((d) => `${d}/**/*.${code}`);
-  const test = opts.testGlobs ?? [
-    ...(opts.testDirs ?? ['test']).map((d) => `${d}/**/*.${code}`),
-    `**/*.{spec,test,e2e-spec}.${code}`,
-  ];
+  const testFiles = `**/*.{spec,test,e2e-spec}.${code}`;
+  // Tests next to the code (testDirs = srcDirs): a test folder that is also a source folder adds nothing to the
+  // test scope (its tests match testFiles), and production-only rules ignore the test files.
+  const test = (
+    opts.testGlobs ?? [...(opts.testDirs ?? ['test']).map((d) => `${d}/**/*.${code}`), testFiles]
+  ).filter((g) => !src.includes(g));
+  if (!test.length) test.push(testFiles);
+  const prodIgnores = [testFiles, ...test.filter((g) => g !== testFiles)];
   const scopes = { src, test, all: [...src, ...test] };
   const rules = { src: {}, test: {}, all: {} };
   const scoped = [];
   const presets = [];
   const missing = new Set();
+  const wraps = {};
   const unknown = new Set();
   const coverage = [];
   const plugins = { ...opts.plugins, aquila: aquilaPlugin };
@@ -100,6 +129,7 @@ export function buildEslintConfig(catalog, opts) {
         }
         configured++;
         presets.push({ ...plugin.configs[preset], files: scopes.all });
+        for (const [rule, skip] of Object.entries(e.skipWhenMatches ?? {})) wraps[rule] = { ...wraps[rule], skip };
         for (const off of e.off ?? []) rules.all[off] = 'off';
         for (const off of e.offInTests ?? []) rules.test[off] = 'off';
         continue;
@@ -119,6 +149,7 @@ export function buildEslintConfig(catalog, opts) {
         continue;
       }
       configured++;
+      if (e.fix === false) wraps[e.rule] = { ...wraps[e.rule], fix: false };
       let options = e.options ?? [];
       if (e.rule === 'jest/valid-title' && opts.ticketPattern) {
         options = [
@@ -164,6 +195,15 @@ export function buildEslintConfig(catalog, opts) {
     usedPlugins[short] =
       fromPresets[short] ?? (name === 'typescript-eslint' ? plugins[name].plugin : plugins[name]);
   }
+  // Wrapped rules run from a copy of their plugin; presets get the same copy (ESLint rejects two objects).
+  for (const [id, how] of Object.entries(wraps)) {
+    const prefix = id.slice(0, id.lastIndexOf('/'));
+    const name = id.split('/').pop();
+    const base = usedPlugins[prefix]?.rules?.[name];
+    if (!base) continue;
+    usedPlugins[prefix] = { ...usedPlugins[prefix], rules: { ...usedPlugins[prefix].rules, [name]: wrapRule(base, how) } };
+    for (const p of presets.filter((x) => x.plugins?.[prefix])) p.plugins = { ...p.plugins, [prefix]: usedPlugins[prefix] };
+  }
   // Aliases (`lint.options.aliases`, e.g. { "local/max-params": "aquila/max-params" }): the project already
   // has the equivalent rule under another name, with `eslint-disable` for it. The aquila-react-ai rule runs under
   // the project's name, so those disables cover it and avoid "Definition for rule … was not found".
@@ -182,7 +222,7 @@ export function buildEslintConfig(catalog, opts) {
     for (const s of scoped) if (s.rule === to) s.rule = from;
   }
   const settings = { aquila: { configPaths: opts.configPaths ?? [], root: opts.root } };
-  const block = (files, r) => ({ files, plugins: usedPlugins, settings, rules: r });
+  const block = (files, r, ignores) => ({ files, ...(ignores ? { ignores } : {}), plugins: usedPlugins, settings, rules: r });
   const ts = plugins['typescript-eslint'];
   // NestJS: with emitDecoratorMetadata the constructor parameter types are runtime values (DI).
   // typescript-eslint then keeps consistent-type-imports from turning those imports into `import type`.
@@ -219,9 +259,11 @@ export function buildEslintConfig(catalog, opts) {
     ...language,
     ...presets,
     block(scopes.all, rules.all),
-    block(scopes.src, rules.src),
+    block(scopes.src, rules.src, prodIgnores),
     block(test, rules.test),
-    ...scoped.map((s) => ({ ...block(s.files, { [s.rule]: s.value }), ignores: s.ignores })),
+    ...scoped.map((s) =>
+      block(s.files, { [s.rule]: s.value }, [...s.ignores, ...(s.files === scopes.src ? prodIgnores : [])]),
+    ),
   ];
   if (plugins.prettier) config.push(plugins.prettier);
   // Project overrides (lint.overrides) win over the level, per rule, everywhere aquila lints.

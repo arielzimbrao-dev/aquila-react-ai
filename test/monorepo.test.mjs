@@ -17,10 +17,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { PROFILE } from '../bin/profile.mjs';
-import { aquila, editConfig, git, LINK_TYPE, NAME, PKG } from './helpers.mjs';
+import { aquila, aquilaWithEnv, editConfig, git, LINK_TYPE, NAME, PKG } from './helpers.mjs';
 
 const write = (root, path, content) => {
   mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -367,6 +367,89 @@ test('CI `when` filters compare paths relative to the project, not the repositor
     assert.equal(r.status, 0, r.stdout);
     assert.match(r.stdout, /✓ scoped/);
   } finally {
+    unlinkAll(top);
+  }
+});
+
+test('AGENTS.md fits its 3,500-char budget with the longest options: subfolder, lint high, autoCommit commit+push, done.gates', () => {
+  const top = repo();
+  try {
+    const root = project(top, 'backend');
+    write(root, 'node_modules/eslint/bin/eslint.js', ''); // an engine, so init adds the lint-aquila gate
+    const init = aquila(root, 'init', '--tools=copilot,claude,codex', '--lint=high', '--mode=team', '--lang=pt-BR');
+    assert.equal(init.code, 0, init.out);
+    editConfig(root, (cfg) => {
+      cfg.project = 'clinic-backend-service';
+      Object.assign(cfg.gates, {
+        typecheck: 'npm run typecheck',
+        lint: 'npm run lint:check',
+        coverage: 'npm run test:cov',
+        build: 'npm run build',
+        e2e: { cmd: 'npm run test:e2e', when: ['src/**', 'test/**', 'docker-compose.yml'] },
+      });
+      cfg.hooks.ci = ['typecheck', 'lint', 'build', 'lint-aquila'];
+      cfg.done = { gates: Object.keys(cfg.gates) };
+      cfg.workflow = { autoCommit: 'commit+push' };
+      cfg.review = { prMaxFiles: 100 };
+      cfg.coverage = { statements: 90, branches: 85, functions: 90, lines: 90, enforced: true };
+      cfg.language = { code: 'en', docs: 'pt-BR', answers: 'pt-BR' };
+    });
+    assert.equal(aquila(root, 'sync').code, 0);
+    const agents = read(root, 'AGENTS.md');
+    assert.ok(agents.length <= 3500, `AGENTS.md is ${agents.length} chars`);
+    assert.match(agents, /commit and push/);
+    assert.doesNotMatch(aquila(root, 'check').out, /budgets over the limit/);
+  } finally {
+    unlinkAll(top);
+  }
+});
+
+test('project in a subfolder: per-folder instructions live at the repository root, applyTo prefixed with the folder', () => {
+  const top = repo();
+  try {
+    const root = project(top, 'backend');
+    write(root, 'src/users/users.service.ts', 'export {};\n');
+    assert.equal(aquila(root, 'init', '--tools=copilot,codex', '--lint=off').code, 0);
+    assert.match(read(PKG, 'skills/aquila-docs/SKILL.md'), /repository root[\s\S]{0,40}\.github\/instructions\/<folder>-<area>\.instructions\.md/);
+    write(top, '.github/instructions/backend-users.instructions.md', "---\napplyTo: 'backend/src/users/**'\n---\n\n# users\n");
+    write(top, '.github/instructions/frontend-ui.instructions.md', "---\napplyTo: 'frontend/src/**'\n---\n\n# ui\n");
+    const verbose = aquila(root, 'check', '--verbose').out;
+    assert.doesNotMatch(verbose, /src\/users\/users\.service\.ts/, 'covered by the root rule');
+    assert.match(verbose, /src\/app\.ts/, 'still uncovered (the frontend rule does not count)');
+    write(top, '.github/instructions/backend-users.instructions.md', `---\napplyTo: 'backend/src/users/**'\n---\n\n${'x'.repeat(2600)}\n`);
+    assert.match(aquila(root, 'check').out, /backend-users\.instructions\.md: \d+ > 2500/, 'root rules of this project keep the budget');
+  } finally {
+    unlinkAll(top);
+  }
+});
+
+test('team mode: .claude/settings.json is stable; doctor prints the plugin install with cd into the project', () => {
+  const top = repo();
+  const bin = mkdtempSync(join(tmpdir(), 'aquila-bin-'));
+  try {
+    // A claude CLI that knows no plugin.
+    write(bin, 'claude', '#!/bin/sh\necho "no plugins"\n');
+    chmodSync(join(bin, 'claude'), 0o755);
+    write(bin, 'claude.cmd', '@echo no plugins\r\n');
+    const root = project(top, 'backend');
+    assert.equal(aquila(root, 'init', '--tools=claude,codex', '--lint=off', '--mode=team').code, 0);
+    const settings = read(root, '.claude/settings.json');
+    assert.equal(aquila(root, 'sync').code, 0);
+    assert.equal(read(root, '.claude/settings.json'), settings, 'sync rewrites nothing');
+    // Claude Code rewrites the file with its own key order: same content, aquila leaves it alone.
+    const reordered = `${JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(settings)).reverse()), null, 2)}\n`;
+    write(root, '.claude/settings.json', reordered);
+    assert.equal(aquila(root, 'sync').code, 0);
+    assert.equal(read(root, '.claude/settings.json'), reordered);
+    const key = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH');
+    const doctor = aquilaWithEnv(root, { [key]: `${bin}${delimiter}${process.env[key]}` }, 'doctor').out;
+    assert.match(doctor, /aquila@[\w-]+ enabled in \.claude\/settings\.json/);
+    assert.ok(
+      doctor.includes(`cd "${root}" && claude plugin marketplace add ./.aquila && claude plugin install aquila@${NAME} --scope local`),
+      doctor,
+    );
+  } finally {
+    rmSync(bin, { recursive: true, force: true });
     unlinkAll(top);
   }
 });

@@ -1,9 +1,8 @@
 This project uses **aquila-react-ai**: the method (rules, roles, commands) is versioned in `.aquila/` (copied from the devDependency by `npx aquila-react-ai sync`; never edit it).
 Project knowledge lives in `docs/ai/` (versioned).
 
-- **Talk to the dev in the "answers" language** (end of this file; never mix variants, e.g. `pt-PT`
-  "ficheiro" vs `pt-BR` "arquivo"): questions, plans, summaries, reports. Code and docs follow the project
-  language.
+- **Talk to the dev in the "answers" language** (end of this file; one variant, e.g. never `pt-PT` "ficheiro"
+  in `pt-BR`): questions, plans, summaries. Code and docs follow the project language.
 - **Before any task**: read only the needed section of the `docs/ai/CONTEXT.md` map and confirm in the real
   code (`.aquila/core/precedence.md`: code beats docs).
 - **Production code**: SDD → TDD (`.aquila/core/workflow.md`): 6-section plan → stop at
@@ -20,4 +19,4 @@ Project knowledge lives in `docs/ai/` (versioned).
 - **Tokens** (`.aquila/core/tokens.md`): locate before reading. Whole-codebase tasks (`aquila-docs`, `aquila-audit`,
   `aquila-deep-audit`, `aquila-c4` from scratch) → first `npx aquila-react-ai tokens [folders]`; on `! ALERT`
   (> 20% of the dev's monthly limit) **show tokens and % and ask for approval**.
-- Never `--no-verify`; commit/push only when asked (or per a standing instruction of the project owner, e.g. `workflow.autoCommit`); never declare done without green gates.
+- Never `--no-verify`; commit/push only when asked (or per `workflow.autoCommit`); never declare done without green gates.

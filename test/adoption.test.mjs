@@ -257,3 +257,52 @@ test("frameworkMajor: the installed framework wins over the declared range; null
     cleanup(bare);
   }
 });
+
+test('doctor: a gate listed only in done.gates (tests run by an external CI) is not "never runs"', () => {
+  const root = project({ 'package.json': pkg({ test: 'jest', typecheck: 'tsc' }) });
+  try {
+    assert.equal(aquila(root, 'init', '--tools=codex', '--lint=off').code, 0);
+    editConfig(root, (cfg) => {
+      cfg.hooks = { ci: ['typecheck'] };
+      cfg.done = { gates: ['typecheck', 'test'] };
+    });
+    const doctor = aquila(root, 'doctor').out;
+    assert.doesNotMatch(doctor, /gate test in no phase/);
+    editConfig(root, (cfg) => {
+      cfg.done = { gates: ['typecheck'] };
+    });
+    assert.match(aquila(root, 'doctor').out, /gate test in no phase/, 'in no phase and not a done criterion');
+  } finally {
+    cleanup(root);
+  }
+});
+
+test('workflow.autoCommit: true | "commit" | "commit+push" says whether the standing instruction includes the push', () => {
+  const root = project({ 'package.json': pkg({ test: 'jest' }) });
+  try {
+    assert.equal(aquila(root, 'init', '--tools=codex', '--lint=off').code, 0);
+    const commits = (value) => {
+      editConfig(root, (cfg) => {
+        cfg.workflow = { autoCommit: value };
+      });
+      const sync = aquila(root, 'sync');
+      return { code: sync.code, line: /\*\*Commits:\*\*[^\n]*/.exec(readIn(root, 'AGENTS.md'))?.[0] ?? '' };
+    };
+    for (const value of [true, 'commit']) {
+      const { code, line } = commits(value);
+      assert.equal(code, 0);
+      assert.match(line, /commit each green change/);
+      assert.match(line, /push only when asked/);
+    }
+    const push = commits('commit+push');
+    assert.equal(push.code, 0);
+    assert.match(push.line, /commit and push each green change/);
+    assert.equal(commits(false).line, '');
+    editConfig(root, (cfg) => {
+      cfg.workflow = { autoCommit: 'push' };
+    });
+    assert.match(aquila(root, 'check').out, /workflow\.autoCommit: invalid format/);
+  } finally {
+    cleanup(root);
+  }
+});

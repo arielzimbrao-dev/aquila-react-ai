@@ -163,7 +163,7 @@ test('lint: ESLint builder applies the level and scopes, and skips missing plugi
   const depth = high.config.find((c) => c.rules?.['max-depth']);
   assert.deepEqual(depth.rules['max-depth'], ['error', 3]);
   assert.deepEqual(depth.files, ['src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'], 'src only');
-  assert.deepEqual(depth.ignores, ['**/*.stories.*'], 'stories excluded from function size');
+  assert.ok(['**/*.stories.*'].every((g) => depth.ignores.includes(g)), 'stories excluded from function size');
   assert.deepEqual(rulesOf(high.config)['aquila/max-params'], ['error', 5]);
   const title = rulesOf(high.config)['jest/valid-title'];
   assert.equal(title, undefined, 'jest missing → rule skipped');

@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.0 — 2026-11-04
+
+Fixes from migrating four real projects to 0.3.0 (NestJS + React in one repository, NestJS in a subfolder,
+Next.js at the root) and clearing lint `high` in them. **Upgrade every aquila package of a repository to 0.4.0
+together.**
+
+- **The project's own ESLint and aquila's rules:** `aquilaEslintCompat()` (`aquila-react-ai/lint/eslint/compat.mjs`), the
+  last item of the project's `eslint.config`. An `eslint-disable` for a rule only `lint-aquila` runs no longer
+  fails there ("Definition for rule … was not found") nor is reported as unused and deleted by `--fix` with
+  `reportUnusedDisableDirectives`; only those two directive messages are dropped, only for catalog rules.
+  `doctor` warns when the project's `eslint.config` lacks it.
+- **No autofix that breaks the typecheck:** a catalog rule with `"fix": false` reports its fix as a suggestion;
+  `unicorn/prefer-at` is one (`.at(-1)` is `T | undefined` without `noUncheckedIndexedAccess`).
+- **Tests next to the code:** with `srcDirs` and `testDirs` on the same folder, production-only rules
+  (`max-lines-per-function`, …) ignore `*.{spec,test,e2e-spec}.*`, and test-only rules no longer reach production
+  files. `sonarjs/prefer-read-only-props` is off in tests.
+- **`AGENTS.md` within 3,500 characters** with the longest options (subfolder, lint `high`, `workflow.autoCommit`,
+  `done.gates`): shorter generated text, covered by a test.
+- **`workflow.autoCommit`:** `true` | `"commit"` (commit, push only when asked) | `"commit+push"`; `true` keeps
+  its meaning.
+- **`doctor`:** a gate listed in `done.gates` (e.g. tests that only the project's own CI runs) is no longer
+  reported as "never runs". The Claude Code plugin install is printed as
+  `cd "<project>" && claude plugin marketplace add ./.aquila && claude plugin install aquila@aquila-react-ai --scope local`
+  (local scope leaves the versioned `.claude/settings.json` untouched; in team mode that file already enables the
+  plugin, so Claude Code offers it when the folder is opened).
+- **Project in a subfolder:** `/aquila-docs` writes per-folder rules at the repository root
+  (`.github/instructions/<folder>-<area>.instructions.md`, `applyTo` prefixed by the folder), where Copilot reads
+  them; `check` counts those root rules for coverage and the 2,500-char budget.
+
 ## 0.3.0 — 2026-11-03
 
 Fixes from installing the 0.2.0 family in real repositories (a NestJS backend and a React frontend in one repo, a

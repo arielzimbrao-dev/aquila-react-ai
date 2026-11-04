@@ -69,7 +69,7 @@ test('init detects the stack, creates docs/ai, adapters, exclude and hooks', () 
       agents.indexOf('**Small PRs:** more than 30') < agents.indexOf('**Done**'),
       'PR size before Done',
     );
-    assert.match(agents, /gates with a `when` list only run in CI when matching files change/);
+    assert.match(agents, /one with a `when` list runs in CI only when those paths change/);
     assert.match(agents, /- Project coverage: statements ≥ 90/);
     assert.match(agents, /language: code en, docs en, answers to the dev en\./);
     assert.match(
@@ -154,7 +154,7 @@ test('when as a list of globs is presented as a CI condition', () => {
     assert.equal(sync.code, 0, sync.out);
     const agents = readIn(root, 'AGENTS.md');
     assert.match(agents, /e2e: `npm run test:e2e` — CI only when these change: src\/\*\*, test\/\*\*/);
-    assert.match(agents, /gates with a `when` list only run in CI when matching files change/);
+    assert.match(agents, /one with a `when` list runs in CI only when those paths change/);
   } finally {
     cleanup(root);
   }
