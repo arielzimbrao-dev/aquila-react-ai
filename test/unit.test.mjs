@@ -184,6 +184,7 @@ test('skills: name equals folder, description ≤ 300 chars and listed in always
     assert.match(head, new RegExp(`^name: ${dir}$`, 'm'), dir);
     const desc = head
       .split(/^description:\s*(?:>-)?/m)[1]
+      .split(/\n(?=\S)/)[0] // up to the next key (model:, disable-model-invocation:)
       .split('\n')
       .map((l) => l.trim())
       .join(' ')

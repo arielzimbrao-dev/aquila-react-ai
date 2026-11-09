@@ -18,6 +18,30 @@ domain experts, tests in a representative environment and human review.
 - Identify available tools/permissions. Follow environment restrictions; specialized reviewers, if
   available, obey the same scope, confidentiality and evidence contract.
 
+### Auditors and synthesizer
+
+Short findings shared between auditors carry almost what the full reasoning does at a fraction of the
+tokens; past 3 auditors the cost keeps rising while the result stops improving.
+
+- **3 auditors** (parallel subagents when the tool allows; otherwise one after the other in the same
+  session), each owning areas of §2 with no overlap — by default: business + data and concurrency ·
+  security + contracts · performance + errors + operations. One of them is also the **contrarian**: it looks
+  for the evidence against the others' findings (false precondition, protection already in place,
+  unreachable path). Small project → 2 auditors or one; never more than 3.
+- **Findings buffer**: `audit_<datetime>.findings.md` at the root (same `<datetime>` as the report; kept out
+  of git with the `audit_*.md`). Append-only, one line per entry:
+  `<auditor> · finding|critique|warning · file:line · evidence in one sentence · confidence 1–10`.
+  Before each step, each auditor reads the others' ~10 latest entries; the reasoning stays with them. Early
+  findings are worth the most: publish as soon as there is evidence, not at the end.
+- **Verify before adopting**: another auditor's finding is a hypothesis until you confirm it in the code;
+  when you use or reject it, cite the entry (`critique` if you dispute it).
+- **Synthesizer** (the main session): reads the buffer and each auditor's final summary; merges duplicates,
+  applies §4 and writes the report. It **does not audit again** nor create findings no auditor proposed. A
+  finding seen by one auditor only, disputed by a `critique` or with confidence ≤ 5 → review the evidence
+  before accepting it; unconfirmed, it goes to hypotheses. Agreement between auditors is evidence, not
+  authority.
+- At the end the useful content of the buffer is in the report: delete the `.findings.md`.
+
 ## 2. Cover risks, follow real flows
 
 For each relevant flow, follow **entry → domain → persistence/effects → output** (route → component/hook →

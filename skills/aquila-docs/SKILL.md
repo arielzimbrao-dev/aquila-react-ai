@@ -2,6 +2,7 @@
 name: aquila-docs
 description: >-
   Generates or updates the project documentation from the code (CONTEXT.md, golden files, per-folder instructions, C4, indexes), incorporating existing docs, ADRs and tracks. Use during /aquila-init or for "/aquila-docs".
+model: sonnet
 ---
 
 # aquila-docs — project documentation from the code

@@ -2,6 +2,8 @@
 name: aquila-config
 description: >-
   Re-asks the aquila-react-ai configuration questions (language, tools, token limit, mode, lint, coverage, QA, CI…) over the existing docs/ai/aquila.json, applies them with sync and offers to rerun init. Use for "change the lint", "switch to team", "reconfigure", "/aquila-config".
+model: sonnet
+disable-model-invocation: true
 ---
 
 # aquila-config — change the configuration

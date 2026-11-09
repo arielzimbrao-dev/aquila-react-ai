@@ -2,6 +2,7 @@
 name: aquila-c4
 description: >-
   Creates or updates the C4 model in docs/c4/ (Mermaid, levels 1–3) from the code. Use for "C4", "architecture diagram", "/aquila-c4".
+model: sonnet
 ---
 
 # aquila-c4

@@ -20,7 +20,7 @@ and quality gates. Installed as a **devDependency** (`npm i -D aquila-react-ai` 
 - Method: [`core/workflow.md`](core/workflow.md) (SDD→TDD, test cases) · [`core/done.md`](core/done.md)
   (done checklist) · [`core/precedence.md`](core/precedence.md) · [`core/tracks.md`](core/tracks.md) ·
   [`core/golden-files.md`](core/golden-files.md) · [`core/docs.md`](core/docs.md) ·
-  [`core/tokens.md`](core/tokens.md) · [`core/style.md`](core/style.md) ·
+  [`core/tokens.md`](core/tokens.md) · [`core/models.md`](core/models.md) (model per role) · [`core/style.md`](core/style.md) ·
   [`core/quality.md`](core/quality.md) (lint by level `off`/`standard`/`high`, catalog
   [`lint/rules.json`](lint/rules.json)).
 - Contributing: [`core/contributing.md`](core/contributing.md) (module map, tests and short path for low-risk changes).

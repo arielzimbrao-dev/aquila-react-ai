@@ -2,7 +2,8 @@
 
 Single copy. The **concrete commands** for each item live in the project's `docs/ai/aquila.json` (`gates`);
 `npx aquila-react-ai gate ci` runs those selected in `hooks.ci` (all by default) and prints only failures and
-totals.
+totals. The checklist in `AGENTS.md` lists `done.gates` when set (otherwise `hooks.ci`): a gate that runs only
+locally, or only in the project's own CI, is still a done criterion.
 
 - [ ] `typecheck`
 - [ ] `test` — unit tests, all green
@@ -24,3 +25,12 @@ totals.
 - [ ] `docs/c4/` updated — if files changed layer, a route/screen was born or an integration changed ([docs](docs.md))
 
 Never declare done without all applicable items green. Never `--no-verify`.
+
+## A red gate that is not the task's
+
+- **It already failed before:** confirm it on the base branch, without your change. Don't fix it out of scope
+  nor turn it off: report the gate, the command and the error to the dev, and check the others.
+- **Flaky** (passes on retry): at most two retries; report it as flaky, with the test.
+- **Missing tool, credential or service:** say so and what is needed; that item stays unverified.
+
+In every case the task closes as **"to verify: …"**, never as done.

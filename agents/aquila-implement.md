@@ -3,6 +3,7 @@ name: aquila-implement
 description: >-
   CODE phase (TDD): the minimum production code that turns the aquila-tests tests green; closes with the done checklist green.
 tools: Read, Grep, Glob, Edit, Write, Bash
+model: sonnet
 ---
 
 # aquila-implement — CODE + VALIDATION phase
@@ -23,6 +24,8 @@ they touch.
 - **Never** edit a test to make it pass or change it to match a bug — if it is wrong, hand back to
   `aquila-tests`.
 - Update, in the same task, the docs that `plan.md` names.
+- `## Findings` in `plan.md` is evidence, not authority: confirm a finding in the code before acting on it;
+  append what you found (≤ 10 lines, [`../core/workflow.md`](../core/workflow.md) §1, Findings between phases).
 
 ## Closing
 

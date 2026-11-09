@@ -929,6 +929,33 @@ function checkAdapters(cfg) {
  * aquila-ai keys missing from the active tools' settings (also in JSONC, which sync doesn't rewrite).
  * In local mode only if the file exists — local settings aren't there in CI.
  */
+/**
+ * Codex concatenates the AGENTS.md files from the repository root down to the working folder and cuts at
+ * 32 KiB (project_doc_max_bytes). Each AGENTS.md of the project is the end of one chain; branches that are
+ * never read together are not added up. `.aquila/` (the method copy) is not a router.
+ */
+const CODEX_MAX_BYTES = 32 * 1024;
+function codexChains() {
+  const listed = git('ls-files', '--cached', '--others', '--exclude-standard', '--', ':(glob)**/AGENTS.md')
+    .split('\n')
+    .filter((f) => f && !/(^|\/)(\.aquila|node_modules)\//.test(f));
+  if (existsSync(p('AGENTS.md'))) listed.push('AGENTS.md');
+  const top = resolve(REPO.top);
+  const over = [];
+  for (const file of new Set(listed)) {
+    let dir = dirname(p(file));
+    let total = 0;
+    for (;;) {
+      if (existsSync(join(dir, 'AGENTS.md'))) total += statSync(join(dir, 'AGENTS.md')).size;
+      if (resolve(dir) === top || dirname(dir) === dir) break;
+      dir = dirname(dir);
+    }
+    if (total > CODEX_MAX_BYTES)
+      over.push(`${file}: AGENTS.md chain from the repository root ${total} bytes > 32 KiB (Codex cuts the rest)`);
+  }
+  return over;
+}
+
 const versionedInLocal = (cfg, file) =>
   cfg.mode !== 'team' && existsSync(p(file)) && Boolean(git('ls-files', '--error-unmatch', file));
 
@@ -980,6 +1007,7 @@ export function check(args = []) {
     !broken.length,
     `links: ${files} files${broken.length ? `, ${broken.length} broken:\n  ${broken.join('\n  ')}` : ''}`,
   );
+  over.push(...codexChains());
   log(
     !over.length,
     `budgets${over.length ? ` over the limit (move detail to references/ or docs/):\n  ${over.join('\n  ')}` : ''}`,

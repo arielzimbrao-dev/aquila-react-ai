@@ -2,6 +2,7 @@
 name: aquila-audit
 description: >-
   Read-only audit of the project against aquila-react-ai (installation, docs, gates, quality, agent efficiency) with a ranked report. Use for "audit the project", "/aquila-audit".
+model: sonnet
 ---
 
 # aquila-audit — project audit

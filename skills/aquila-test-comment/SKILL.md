@@ -2,6 +2,7 @@
 name: aquila-test-comment
 description: >-
   Writes the "How to test" comment for non-dev QA (Markdown for the tracker) from the ticket and the code. Use for "how to test", "/aquila-test-comment".
+model: haiku
 ---
 
 # aquila-test-comment — "How to test" for QA

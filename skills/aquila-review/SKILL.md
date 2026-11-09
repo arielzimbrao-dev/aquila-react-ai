@@ -2,6 +2,7 @@
 name: aquila-review
 description: >-
   Read-only review of a diff/PR against invariants, layers, tests, gates and doc-sync. Use for "review", "/aquila-review".
+model: sonnet
 ---
 
 # aquila-review

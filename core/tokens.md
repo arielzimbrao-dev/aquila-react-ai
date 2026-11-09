@@ -24,8 +24,12 @@ scope in this conversation, do not ask again.
 
 ## Rules
 
-- **Always loaded ≤ 3 KB**: the root routers and skill/agent descriptions (short). Everything else is read
-  on demand.
+- **Always loaded, small**: the root routers (`check` budgets: `AGENTS.md` 3,500 characters,
+  `copilot-instructions.md` 8,000; each chain of `AGENTS.md` from the repository root down to a folder
+  ≤ 32 KiB, Codex's cut) and the skill/agent descriptions (short). Everything else is read on demand.
+  Maintenance notes go in HTML comments (`<!-- … -->`): Claude Code strips them from the context.
+- **Model per role** ([models](models.md)): `aquila-review` runs on the `standard` model by default; on a
+  risky PR (security, data, money) ask for the review with the `deep` one.
 - **Locate before reading**: `docs/ai/CONTEXT.md` map → `git ls-files`/`grep -l` → open only what the
   change touches, by line range when the file is large. Never reread a file already read.
 - **Large docs by section**: "open only §"; never the whole file (`CONTEXT.md` lists which ones).

@@ -28,6 +28,10 @@ You do **not** edit files. **Frugal:** load the diff and only the rule sections 
 7. **Style** — [`../core/style.md`](../core/style.md): comments that restate the code, language.
 8. **React** — conventions for the project's React major and framework ([`../core/react.md`](../core/react.md)): pure render, hooks rules, effects only for external sync, server data in the data library, accessibility, no secrets in the client, no APIs newer than the installed version.
 
+You are the synthesizer ([`../core/workflow.md`](../core/workflow.md) §4): `aquila-implement`'s close and the
+`## Findings` of `plan.md` are evidence to confirm, not a verdict; you don't reopen the plan. On a risky PR
+(security, data, money) ask for the review with the `deep` model ([`../core/models.md`](../core/models.md)).
+
 ## Output
 
 One line per finding, most severe first: `file:line — problem → fix`, citing the rule. If a gate

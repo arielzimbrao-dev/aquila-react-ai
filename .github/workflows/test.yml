@@ -32,3 +32,14 @@ jobs:
       # bash expands the glob on Windows too.
       - run: node --test test/*.test.mjs
         shell: bash
+
+  plugin:
+    # Claude plugin manifest, marketplace and components (warnings count as errors).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install -g @anthropic-ai/claude-code
+      - run: claude plugin validate . --strict && claude plugin validate .claude-plugin/plugin.json --strict

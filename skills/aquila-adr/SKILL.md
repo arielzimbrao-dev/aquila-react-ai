@@ -2,6 +2,7 @@
 name: aquila-adr
 description: >-
   Writes a numbered ADR in docs/adr/ (context, options, decision, consequences). Use for "ADR", "record the decision", "/aquila-adr".
+model: sonnet
 ---
 
 # aquila-adr

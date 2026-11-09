@@ -1,0 +1,21 @@
+{
+  "$comment": "Model per role and skill (core/models.md). Change only here and align the frontmatters: test/models.test.mjs fails when they diverge.",
+  "levels": { "deep": "opus", "standard": "sonnet", "light": "haiku" },
+  "roles": {
+    "aquila-plan": "deep",
+    "aquila-tests": "standard",
+    "aquila-implement": "standard",
+    "aquila-review": "standard",
+    "aquila-adr": "standard",
+    "aquila-audit": "standard",
+    "aquila-c4": "standard",
+    "aquila-config": "standard",
+    "aquila-deep-audit": "deep",
+    "aquila-docs": "standard",
+    "aquila-doctor": "light",
+    "aquila-execute": "standard",
+    "aquila-guideline": "deep",
+    "aquila-init": "standard",
+    "aquila-test-comment": "light"
+  }
+}

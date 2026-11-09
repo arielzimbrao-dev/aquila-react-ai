@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.5.0 — 2026-11-09
+
+Method improvements adapted from edp-ai (the multi-stack sibling of this method). Nothing to change in
+projects: `npm i -D aquila-react-ai@0.5.0` and `npx aquila-react-ai sync` bring the new `.aquila/`.
+
+- **Medium path for a small bug** (`core/workflow.md`): root cause in one place, up to 3 production files, no
+  schema/API/security/CI → a 3-line plan in the chat (root cause · fix · proving test), still stopping at
+  `plan approved`; anything bigger falls back to the full flow.
+- **Plan and approval:** `plan.md` opens with `Task: … · Date: …` (a plan from another task is not an approval)
+  and is deleted with `spec.md` when the task closes; only `plan approved` or `/aquila-execute` start the
+  implementation ("ok" → the agent asks).
+- **Findings between phases:** `plan.md` ends with `## Findings`; tests, implement and review append short
+  `phase · finding|warning|critique · file:line · evidence` lines instead of passing the whole conversation,
+  and verify another phase's finding before acting on it.
+- **Refactor without behavior change** has its own rule (existing tests are the net; new ones pass at once),
+  and `aquila-review` is the synthesizer: serious findings go back to the owning phase, at most two cycles.
+- **A red gate that is not the task's** (`core/done.md`): already failing on the base branch, flaky, or a
+  missing tool/service → reported, never fixed out of scope or turned off; the task closes as "to verify: …".
+- **Model per role** (`core/models.md`, `adapters/models.json`): `deep`/opus for plan, guideline and
+  deep-audit, `standard`/sonnet for the execution roles, `light`/haiku for doctor and test-comment, in the
+  agent and skill frontmatter (Claude Code applies it; elsewhere the agent tells the dev).
+  `aquila-execute`, `aquila-init` and `aquila-config` are `disable-model-invocation`.
+- **Deep audit with up to 3 auditors** sharing an append-only `audit_<datetime>.findings.md` (one is the
+  contrarian), and the main session as a synthesizer that does not audit again.
+- **`check`: AGENTS.md chains over 32 KiB fail** — Codex concatenates the `AGENTS.md` files from the
+  repository root down to the working folder and cuts the rest; separate branches are not added up.
+- **Plugin quality:** `evals/` cases for `claude plugin eval` (the right skill fires; `aquila-execute` never
+  fires on its own) and `claude plugin validate --strict` in CI. `evals/` is not published to npm.
+
 ## 0.4.1 — 2026-11-09
 
 Fixes found by running the regression scan of edp-ai (the multi-stack sibling of this method) against this

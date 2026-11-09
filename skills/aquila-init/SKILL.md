@@ -2,6 +2,8 @@
 name: aquila-init
 description: >-
   Prepares the project for its first plan: takes the existing repository into account, asks language, tools, tokens, mode and lint; sets up docs, CI, hooks and agents and validates the gates. Use for "install aquila-react-ai", "/aquila-init".
+model: sonnet
+disable-model-invocation: true
 ---
 
 # aquila-init — initial setup

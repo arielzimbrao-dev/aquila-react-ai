@@ -3,6 +3,7 @@ name: aquila-plan
 description: >-
   PLAN phase (SDD): spec.md + 6-section plan.md from the code; never writes code or tests; stops at `plan approved`.
 tools: Read, Grep, Glob, Bash, Write, WebFetch
+model: opus
 ---
 
 # aquila-plan — PLAN phase
@@ -32,9 +33,13 @@ Apply them; do not repeat them.
   - _Files/modules_ above `review.prMaxFiles` (default 30) → split into increments, one PR each
     ([`../core/workflow.md`](../core/workflow.md) §5).
   - Self-contained: the executor reads only `AGENTS.md` + `docs/ai/CONTEXT.md` + `plan.md`.
+  - Opens with `Task: <ticket or request> · Date: <YYYY-MM-DD>` and ends with an empty `## Findings`
+    ([`../core/workflow.md`](../core/workflow.md) §1, Findings between phases).
+- Small bug with its root cause in one place (up to 3 production files, no schema/API/security/CI) → the
+  3-line plan in the chat instead ([`../core/workflow.md`](../core/workflow.md), medium path).
 
 ## Limits
 
 - You write **only** `spec.md` and `plan.md`. Commands = read-only exploration.
 - Bug → root cause and the single shared place to fix it (name every caller).
-- **Stop and wait for `plan approved`.**
+- **Stop and wait for `plan approved` (or `/aquila-execute`).** "ok" or "looks good" is not an approval: ask.

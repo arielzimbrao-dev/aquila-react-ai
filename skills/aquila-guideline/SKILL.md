@@ -2,6 +2,7 @@
 name: aquila-guideline
 description: >-
   Creates or refines a track (≥3 tickets with shared contracts) in docs/tracks/. Use for "new track", "epic", "master plan", "/aquila-guideline".
+model: opus
 ---
 
 # aquila-guideline

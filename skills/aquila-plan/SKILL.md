@@ -2,6 +2,7 @@
 name: aquila-plan
 description: >-
   Plans a task: spec.md if non-trivial + 6-section plan.md; stops at `plan approved`. Use for "plan", "/aquila-plan" or before changing production code.
+model: opus
 ---
 
 # aquila-plan

@@ -2,6 +2,7 @@
 name: aquila-doctor
 description: >-
   Diagnoses and fixes the aquila-react-ai installation (package, docs/ai, adapters, hooks, CI workflow, plugin, budgets). Use when something in aquila-react-ai fails or for "/aquila-doctor".
+model: haiku
 ---
 
 # aquila-doctor
