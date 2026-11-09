@@ -258,6 +258,8 @@ export function buildEslintConfig(catalog, opts) {
     },
     ...language,
     ...presets,
+    // eslint-config-prettier switches off formatting-adjacent rules (e.g. curly): the catalog comes after it.
+    ...(plugins.prettier ? [plugins.prettier] : []),
     block(scopes.all, rules.all),
     block(scopes.src, rules.src, prodIgnores),
     block(test, rules.test),
@@ -265,7 +267,6 @@ export function buildEslintConfig(catalog, opts) {
       block(s.files, { [s.rule]: s.value }, [...s.ignores, ...(s.files === scopes.src ? prodIgnores : [])]),
     ),
   ];
-  if (plugins.prettier) config.push(plugins.prettier);
   // Project overrides (lint.overrides) win over the level, per rule, everywhere aquila lints.
   const overrides = Object.entries(opts.overrides ?? {});
   if (overrides.length)
@@ -274,5 +275,11 @@ export function buildEslintConfig(catalog, opts) {
       plugins: usedPlugins,
       rules: Object.fromEntries(overrides.map(([rule, value]) => [rule, value])),
     });
-  return { config, missing: [...missing], unknown: [...unknown], coverage };
+  // `files: []` is an ESLint config error (e.g. srcDirs: []): a block with no folder to lint goes away.
+  return {
+    config: config.filter((c) => !c.files || c.files.length),
+    missing: [...missing],
+    unknown: [...unknown],
+    coverage,
+  };
 }

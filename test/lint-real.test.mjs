@@ -35,6 +35,25 @@ test('lint --baseline: existing violations do not fail, a new one does', { skip 
   }
 });
 
+test('lint --baseline that fails keeps the previous baseline', { skip }, () => {
+  const { top, root } = workspace({ 'src/old.ts': 'export function a(x: number) {\n  if (x) return 1;\n  return 2;\n}\n' });
+  try {
+    assert.equal(aquila(root, 'init', '--tools=codex', '--lint=standard').code, 0);
+    editConfig(root, (cfg) => {
+      cfg.lint.overrides = { curly: 'error' };
+    });
+    assert.equal(aquila(root, 'lint', '--baseline').code, 0);
+    const before = readFileSync(join(root, 'docs/ai/lint-baseline.json'), 'utf8');
+    editConfig(root, (cfg) => {
+      cfg.lint.overrides = { curly: ['error', 'bogus-option'] };
+    });
+    assert.notEqual(aquila(root, 'lint', '--baseline').code, 0, 'an invalid rule config stops ESLint before it writes');
+    assert.equal(readFileSync(join(root, 'docs/ai/lint-baseline.json'), 'utf8'), before);
+  } finally {
+    drop(top);
+  }
+});
+
 test('NestJS: lint --fix at level high keeps constructor-injected imports as values (DI metadata)', { skip: skip || (!PROFILE.lint.decoratorMetadata && 'NestJS only') }, () => {
   const { top, root } = workspace({
     'src/repo.ts': 'export class Repo {\n  find(): string {\n    return "ok";\n  }\n}\n',

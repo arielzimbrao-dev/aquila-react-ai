@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.1 — 2026-11-09
+
+Fixes found by running the regression scan of edp-ai (the multi-stack sibling of this method) against this
+package. No action needed in projects beyond `npm i -D aquila-react-ai@0.4.1` and `npx aquila-react-ai sync`.
+
+- **`$` in a gate command** (`$&`, `$'`, `$$`) no longer corrupts `AGENTS.md`/the routers or the
+  `.git/info/exclude` block (it was read as a `String.replace` pattern).
+- **A BOM in `docs/ai/aquila.json`** (Windows PowerShell 5 writes one) no longer breaks every command.
+- **`doctor` with an invalid config** shows the schema errors and exits 1 instead of crashing with a `TypeError`.
+- **`gate`:** a gate without a command fails on its own and the others still run; the Portuguese Windows
+  message "não é reconhecido como um comando" counts as a missing tool.
+- **`done.gates: []`** falls back to `hooks.ci` in the done checklist instead of "no gates defined".
+- **`init` never makes a fixing script a gate:** it now checks every workspace (a `lint` with `--fix` in one
+  workspace ran it through `npm run lint --workspaces`) and also detects `prettier -w`; `--fix-dry-run` is not
+  a fix.
+- **Generated workflow:** an `install-command` with a line break or YAML-special characters is quoted (it
+  produced invalid YAML).
+- **Claude Code guard (`guard-bash`):** also blocks `git push -fu`, `git push --mirror`, abbreviated
+  `--no-verif`, and `git.exe` (also by path, `C:/…/git.exe`).
+- **Globs** (`applyTo`, `when`, `lint.options.configPaths`): `{a,b}`, `?`, `./src/**` and a bare folder
+  (`src`, `src/`) match like `.gitignore`; `applyTo` lists no longer split inside `{a,b}`.
+- **Local mode:** a `.vscode/settings.json` the team versions is not rewritten (a note says what to add);
+  `audit_*.md` reports from `/aquila-deep-audit` go in `.git/info/exclude`; the template's `<e.g.: …>` examples
+  no longer leak into `copilot-instructions.md`.
+- **Lint:** `eslint-config-prettier` comes before the catalog, so it no longer switches catalog rules off
+  (e.g. `curly`); an empty `srcDirs` no longer produces an invalid `files: []`; a failing `lint --baseline`
+  restores the previous `docs/ai/lint-baseline.json` instead of losing it.
+
 ## 0.4.0 — 2026-11-04
 
 Fixes from migrating four real projects to 0.3.0 (NestJS + React in one repository, NestJS in a subfolder,

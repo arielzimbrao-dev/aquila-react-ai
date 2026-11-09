@@ -15,9 +15,10 @@ const HOOK_DIRS = String.raw`(?:\.aquila-hooks|\.aquila/githooks|\.husky(?:/_)?)
 // `git [global options] <sub>`: the subcommand after git, not the word elsewhere
 // (`git log --grep=commit -n 5` is not a commit).
 const sub = (name) =>
-  new RegExp(String.raw`\bgit(?:\s+-[cC]\s+\S+|\s+--?[\w.-]+(?:=\S+)?)*\s+${name}\b`).source;
+  new RegExp(String.raw`\bgit(?:\.exe)?(?:\s+-[cC]\s+\S+|\s+--?[\w.-]+(?:=\S+)?)*\s+${name}\b`).source;
 const RULES = [
-  [/(^|\s)--no-verify(\s|$|['"])/, SKIP_HOOKS],
+  // git accepts unique prefixes of long options (--no-verif, --no-veri).
+  [/(^|\s)--no-veri[a-z]*(\s|$|['"=])/, SKIP_HOOKS],
   // `git commit -n` is the --no-verify shorthand (also grouped: -an, -nm…).
   [new RegExp(`${sub('commit')}.*\\s-(?!-)[a-zA-Z]*n[a-zA-Z]*(\\s|$|['"])`), SKIP_HOOKS],
   // Redirecting hooks to another dir (e.g. /dev/null) is skipping them.
@@ -30,7 +31,13 @@ const RULES = [
     ),
     SKIP_HOOKS,
   ],
-  [new RegExp(`${sub('push')}.*(\\s--force(?!-with-lease)\\b|\\s-f(\\s|$|['"]))`), FORCE_PUSH],
+  // -f also grouped (-fu), and --mirror, which forces every ref.
+  [
+    new RegExp(
+      `${sub('push')}.*(\\s--force(?!-with-lease)\\b|\\s--mirror\\b|\\s-(?!-)[a-zA-Z]*f[a-zA-Z]*(\\s|$|['"]))`,
+    ),
+    FORCE_PUSH,
+  ],
   // A `+` refspec (git push origin +main) forces the update like --force.
   [new RegExp(`${sub('push')}.*\\s\\+[^\\s'"]+`), FORCE_PUSH],
 ];
@@ -39,7 +46,8 @@ const RULES = [
 const HUSKY_ENV = /(^|[\s(])(\$env:)?HUSKY(_SKIP_HOOKS)?\s*=/i;
 // The commit message (`-m "… -n …"`, `-am x`) is not flags: strip it before the rules; the flag stays.
 const MESSAGE = /\s(-[a-zA-Z]*m|--message)(?:=|\s+)(?:"(?:[^"\\]|\\.)*"|'[^']*'|\S+)/g;
-const IS_GIT = /(^|[\s'"(])git(\s|$)/;
+// Also `git.exe` and a path to it (`C:/Git/bin/git.exe`).
+const IS_GIT = /(^|[\s'"(/\\])git(\.exe)?(\s|$)/i;
 
 /** Line without the shell comment (` # …` outside quotes). */
 function stripComment(line) {

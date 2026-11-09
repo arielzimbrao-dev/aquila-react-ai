@@ -113,7 +113,8 @@ const DEFAULT_BUDGETS = {
 /** Paths where environment variables may be read (AQ-CFG-01), by default (stacks/<preset>.json). */
 export const DEFAULT_CONFIG_PATHS = loadPreset().configPaths;
 const p = (...parts) => join(ROOT, ...parts);
-const read = (file) => readFileSync(p(file), 'utf8');
+// A BOM (Windows PowerShell 5 writes one) is not content.
+const read = (file) => readFileSync(p(file), 'utf8').replace(/^\uFEFF/, '');
 const readJson = (file) => JSON.parse(read(file));
 const posix = (path) => path.split('\\').join('/');
 const escapeRe = (text) => text.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -195,6 +196,12 @@ const ciSteps = () => [
   `        run: npx ${NAME} gate ci`,
 ];
 
+/** A plain YAML scalar when safe; otherwise double-quoted (multi-line, `: `, ` #`, a leading indicator). */
+const yamlScalar = (v) => {
+  const text = String(v);
+  return /\n|: | #|^[\s\-?:,[\]{}#&*!|>'"%@`]|\s$/.test(text) ? JSON.stringify(text) : text;
+};
+
 /** Self-contained CI workflow with the project's install, runtime and services (`ci` in aquila.json). */
 export function ciCaller(cfg, prefix = '') {
   const ci = cfg.ci ?? {};
@@ -245,7 +252,7 @@ export function ciCaller(cfg, prefix = '') {
     `          node-version: ${quote(ci['node-version'] ?? '22')}`,
     ...(ci.cache ? [`          cache: ${quote(ci.cache)}`] : []),
     ...(ci.cache && dir ? [`          cache-dependency-path: ${quote(`${dir}/${LOCKFILE[ci.cache]}`)}`] : []),
-    ...(ci['install-command'] ? [`      - run: ${ci['install-command']}`] : []),
+    ...(ci['install-command'] ? [`      - run: ${yamlScalar(ci['install-command'])}`] : []),
     ...ciSteps(),
     '',
   ].join('\n');
@@ -313,7 +320,7 @@ function assertConfig(cfg) {
 /** Definition of done with the project's real commands (saves opening done.md + aquila.json each task). */
 function doneSection(cfg) {
   // done.gates is independent of CI: a gate that needs a local service stays a done criterion.
-  const lines = (cfg.done?.gates ?? cfg.hooks?.ci ?? Object.keys(cfg.gates ?? {}))
+  const lines = (cfg.done?.gates?.length ? cfg.done.gates : (cfg.hooks?.ci ?? Object.keys(cfg.gates ?? {})))
     .map((name) => {
       const g = cfg.gates?.[name];
       if (!g) return null;
@@ -503,6 +510,8 @@ function contextSection(cfg) {
   const stop = lines.findIndex((l, i) => i > start && new RegExp(`^#{1,${depth}} `).test(l));
   const text = lines
     .slice(start + 1, stop < 0 ? undefined : stop)
+    // The template's own examples (`- <e.g.: …>`, pt `<ex.: …>`) are not project rules.
+    .filter((l) => !/^\s*[-*]\s*<(?:e\.g\.|ex\.):.*>\s*$/.test(l))
     .join('\n')
     .trim();
   return text.replaceAll(/\]\(([^)\s]+)\)/g, (whole, target) => {
@@ -571,7 +580,7 @@ function writeExclude(paths) {
   const block = `# >>> ${tag} (generated; do not edit)\n${anchored.join('\n')}\n# <<< ${tag}\n`;
   const re = excludeBlock(tag);
   const next = re.test(current)
-    ? current.replace(re, block)
+    ? current.replace(re, () => block)
     : `${current}${current && !current.endsWith('\n') ? '\n' : ''}${block}`;
   mkdirSync(dirname(full), { recursive: true });
   writeFileSync(full, next);
@@ -788,7 +797,7 @@ export function sync() {
     let next = item.content;
     let note = `✓ ${item.path}`;
     if (current !== null && item.router) {
-      if (BLOCK_RE.test(current)) next = current.replace(BLOCK_RE, item.content);
+      if (BLOCK_RE.test(current)) next = current.replace(BLOCK_RE, () => item.content);
       else if (!team && git('ls-files', '--error-unmatch', item.path)) {
         // In local mode nothing from aquila-ai is versioned: touching a team router would leave it modified.
         notes.push(
@@ -857,6 +866,12 @@ export function sync() {
   // Settings: aquila-ai keys go in when the tool is active and out when it is turned off.
   // The Claude marketplace (package directory) is shared in team: without it a teammate can't install the plugin.
   for (const [file, patch, active] of settingsSpec(cfg)) {
+    // Local mode: a settings file the team versions is not ours to change (it would show up modified).
+    if (versionedInLocal(cfg, file)) {
+      if (active && !hasKeys(parseJsonc(read(file)) ?? {}, patch))
+        notes.push(`! ${file} is versioned and in local mode I don't touch it — add by hand ${JSON.stringify(patch)} or use mode team`);
+      continue;
+    }
     const note = active ? mergeJson(file, patch) : unmergeJson(file, patch);
     if (note) notes.push(note);
   }
@@ -868,6 +883,8 @@ export function sync() {
   const excluded = [
     'plan.md',
     'spec.md',
+    // `/aquila-deep-audit` reports: the dev decides what to share.
+    'audit_*.md',
     LOCAL,
     // In team the routers and `/aquila-*` shortcuts are the team's (versioned); in local, this machine's.
     ...items.filter((i) => !i.versioned && !(team && (i.router || i.shared))).map((i) => i.path),
@@ -912,11 +929,15 @@ function checkAdapters(cfg) {
  * aquila-ai keys missing from the active tools' settings (also in JSONC, which sync doesn't rewrite).
  * In local mode only if the file exists — local settings aren't there in CI.
  */
+const versionedInLocal = (cfg, file) =>
+  cfg.mode !== 'team' && existsSync(p(file)) && Boolean(git('ls-files', '--error-unmatch', file));
+
 function settingsDrift(cfg, required = false) {
   const team = cfg.mode === 'team';
   const drift = [];
   for (const [file, patch, active] of settingsSpec(cfg)) {
     if (!active || (!team && !required && !existsSync(p(file)))) continue;
+    if (!required && versionedInLocal(cfg, file)) continue;
     const parsed = existsSync(p(file)) ? parseJsonc(read(file)) : null;
     if (!parsed || !hasKeys(parsed, patch)) {
       drift.push(`${file} without the ${NAME} keys (${Object.keys(patch).join(', ')})`);
@@ -1031,7 +1052,7 @@ export function lint(args) {
 
 // ---------------------------------------------------------------- gate
 
-const TOOL_MISSING = /not recognized|command not found|ENOENT|npx canceled/i;
+export const TOOL_MISSING = /not recognized|command not found|não é reconhecido|ENOENT|npx canceled/i;
 
 function ciChangedFiles() {
   const eventPath = process.env.GITHUB_EVENT_PATH;
@@ -1122,6 +1143,11 @@ export function gate(phase) {
       }
     }
     const cmd = typeof spec === 'string' ? spec : spec.cmd;
+    if (typeof cmd !== 'string' || !cmd.trim()) {
+      log(false, `${name}: gate without a command (${CONFIG} → gates.${name}.cmd)`);
+      failed++;
+      continue;
+    }
     const started = Date.now();
     const r = spawnSync(cmd, {
       cwd: ROOT,
@@ -1512,6 +1538,11 @@ export function doctor() {
     return 0;
   }
   const cfg = loadConfig();
+  const { errors } = configValidation(cfg);
+  if (errors.length) {
+    log(false, `${CONFIG} invalid (schema: .aquila/schema/aquila.schema.json):\n  ${errors.join('\n  ')}`);
+    return 1;
+  }
   log(
     true,
     `mode ${cfg.mode} · tools ${cfg.tools.join(', ')} · stack ${cfg.stack} · lint ${cfg.lint?.level ?? 'off'}${cfg.lint?.engine ? ` (${cfg.lint.engine})` : ''}`,

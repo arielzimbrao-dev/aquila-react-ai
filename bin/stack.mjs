@@ -13,7 +13,7 @@ const SKIP_DIRS = new Set([
   'build',
   'coverage',
 ]);
-const read = (root, file) => readFileSync(join(root, file), 'utf8');
+const read = (root, file) => readFileSync(join(root, file), 'utf8').replace(/^\uFEFF/, '');
 const readJson = (root, file) => JSON.parse(read(root, file));
 
 function expandDirs(root, pattern) {
@@ -300,16 +300,19 @@ export function detectCodeLanguage(root, srcDirs) {
 function resolveGates(root, preset, notes) {
   const pkg = existsSync(join(root, 'package.json')) ? readJson(root, 'package.json') : {};
   const scripts = pkg.scripts ?? {};
-  const wsScripts = new Map(
-    workspaces(root).flatMap((w) =>
-      Object.entries(readJson(root, `${w}/package.json`).scripts ?? {}),
-    ),
-  );
+  // Every workspace's command per script: `npm run s --workspaces` runs them all.
+  const wsScripts = new Map();
+  for (const w of workspaces(root))
+    for (const [name, cmd] of Object.entries(readJson(root, `${w}/package.json`).scripts ?? {}))
+      wsScripts.set(name, [...(wsScripts.get(name) ?? []), cmd]);
   const pnpm = existsSync(join(root, 'pnpm-workspace.yaml'));
-  const fixes = (text) => /(?:^|\s)--(?:fix|write)\b/.test(text ?? '');
+  const fixing = (cmd) =>
+    /(?:^|\s)--(?:fix|write)(?=\s|=|$)/.test(cmd) || /\bprettier\b[^&|;]*\s-w(?=\s|$)/.test(cmd);
+  const fixes = (s) => [scripts[s], ...(wsScripts.get(s) ?? [])].some((c) => c && fixing(c));
   const run = (s) => {
-    if (scripts[s]) return fixes(scripts[s]) ? null : `npm run ${s}`;
-    if (!wsScripts.has(s) || fixes(wsScripts.get(s))) return null;
+    if (fixes(s)) return null;
+    if (scripts[s]) return `npm run ${s}`;
+    if (!wsScripts.has(s)) return null;
     return pnpm ? `pnpm -r --if-present run ${s}` : `npm run ${s} --workspaces --if-present`;
   };
   const major = dependencyMajor(root, PROFILE.framework);
@@ -324,10 +327,10 @@ function resolveGates(root, preset, notes) {
       cmd = rewrite.cmd;
       notes?.push(`ℹ gates.${name}: \`${scripts[script]}\` → \`${cmd}\` (${rewrite.why})`);
     }
-    const fixing = spec.npmScripts.filter((s) => fixes(scripts[s] ?? wsScripts.get(s)));
-    if (!cmd && fixing.length)
+    const fixers = spec.npmScripts.filter(fixes);
+    if (!cmd && fixers.length)
       notes?.push(
-        `! gates.${name}: script ${fixing.join(', ')} changes files (--fix/--write) and is not used in hooks — add a check-only script (e.g. "${name}:check") and run init again, or set gates.${name}`,
+        `! gates.${name}: script ${fixers.join(', ')} changes files (--fix/--write) and is not used in hooks — add a check-only script (e.g. "${name}:check") and run init again, or set gates.${name}`,
       );
     if (cmd) gates[name] = spec.when ? { cmd, when: spec.when } : cmd;
   }

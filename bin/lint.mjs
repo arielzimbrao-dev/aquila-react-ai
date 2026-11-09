@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -264,7 +264,10 @@ export function lint(args, { root, loadConfig }) {
   );
   const config = posix(relative(root, join(PKG, 'lint', 'eslint', 'eslint.config.mjs')));
   // Baseline: record every current violation (adoption on legacy code); afterwards only new ones fail.
-  if (opts.baseline && existsSync(join(root, baseline))) rmSync(join(root, baseline));
+  // The previous one is kept aside and comes back if ESLint fails (config error, crash): never lost.
+  const previous = `${baseline}.bak`;
+  if (opts.baseline && existsSync(join(root, baseline)))
+    renameSync(join(root, baseline), join(root, previous));
   const baselineArgs = !suppressions
     ? []
     : opts.baseline
@@ -293,6 +296,10 @@ export function lint(args, { root, loadConfig }) {
       env: { ...process.env, AQUILA_ROOT: root, AQUILA_LINT_LEVEL: level },
     },
   );
+  if (opts.baseline && existsSync(join(root, previous))) {
+    if (result.status === 0) rmSync(join(root, previous));
+    else renameSync(join(root, previous), join(root, baseline));
+  }
   if (result.error) console.error(`✗ eslint: ${result.error.message}`);
   else if (result.signal) console.error(`✗ eslint: killed by ${result.signal}`);
   else if (opts.baseline && result.status === 0)

@@ -1,6 +1,6 @@
 {
   "name": "aquila",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "AI development method for React: plan/tests/implement/review roles, aquila-* commands and guards.",
   "author": { "name": "Aquila Zimbrao" }
 }

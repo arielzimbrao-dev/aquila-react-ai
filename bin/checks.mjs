@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { globToRegex } from './glob.mjs';
+import { globToRegex, splitGlobs } from './glob.mjs';
 import { missingTool } from './lint.mjs';
 import { PROFILE } from './profile.mjs';
 import { isDispatcher } from './repo.mjs';
@@ -14,7 +14,7 @@ export const TEMPLATE_MARKS = {
 };
 const LINK = /\]\(([^)\s]+)\)/g;
 const EXTERNAL = /^(?:[a-z][a-z0-9+.-]*:|#)/i;
-const read = (root, file) => readFileSync(join(root, file), 'utf8');
+const read = (root, file) => readFileSync(join(root, file), 'utf8').replace(/^\uFEFF/, '');
 
 export function docWarnings(root) {
   const missing = DOC_DIRS.filter(
@@ -60,7 +60,7 @@ export function inspectDocuments({ root, cfg, walk, routers, instructions, budge
       if (path && !existsSync(resolve(root, file, '..', path))) broken.push(`${file} → ${target}`);
     }
   }
-  const globsOf = (file) => (frontmatter(read(root, file)).applyTo ?? '').split(',').map((g) => g.trim()).filter(Boolean);
+  const globsOf = (file) => splitGlobs(frontmatter(read(root, file)).applyTo ?? '');
   const own = top
     ? walk(top, (file) => file.endsWith('.instructions.md')).filter((file) => {
         const globs = globsOf(file);

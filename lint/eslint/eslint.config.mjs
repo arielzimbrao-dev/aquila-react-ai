@@ -11,7 +11,7 @@ import { loadEslintPlugins } from './plugins.mjs';
 
 const root = resolve(process.env.AQUILA_ROOT ?? process.cwd());
 const cfg = existsSync(join(root, 'docs/ai/aquila.json'))
-  ? JSON.parse(readFileSync(join(root, 'docs/ai/aquila.json'), 'utf8'))
+  ? JSON.parse(readFileSync(join(root, 'docs/ai/aquila.json'), 'utf8').replace(/^\uFEFF/, ''))
   : {};
 const level = process.env.AQUILA_LINT_LEVEL ?? cfg.lint?.level ?? 'standard';
 const catalog = JSON.parse(readFileSync(new URL('../rules.json', import.meta.url), 'utf8'));
